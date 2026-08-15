@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Админ-панель - Скамейки Твери</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: Arial;
+        background: #f5f6fa;
+        padding: 20px;
+      }
+
+      .header {
+        background: #2c3e50;
+        color: white;
+        padding: 20px;
+        border-radius: 15px;
+        margin-bottom: 20px;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+
+      .stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 15px;
+        margin-bottom: 20px;
+      }
+      .stat-card {
+        background: white;
+        padding: 20px;
+        border-radius: 15px;
+      }
+      .stat-value {
+        font-size: 2em;
+        font-weight: 700;
+        color: #2c3e50;
+      }
+
+      .table-container {
+        background: white;
+        border-radius: 15px;
+        padding: 20px;
+        overflow-x: auto;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th,
+      td {
+        padding: 12px;
+        text-align: left;
+        border-bottom: 1px solid #e0e0e0;
+      }
+      th {
+        background: #f8f9fa;
+      }
+
+      .status {
+        padding: 5px 10px;
+        border-radius: 15px;
+        font-size: 0.85em;
+        font-weight: 600;
+      }
+      .status-active {
+        background: #d4edda;
+        color: #155724;
+      }
+      .status-hidden {
+        background: #f8d7da;
+        color: #721c24;
+      }
+      .status-pending {
+        background: #fff3cd;
+        color: #856404;
+      }
+
+      .btn {
+        padding: 8px 15px;
+        border: none;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 600;
+        margin: 2px;
+      }
+      .btn-success {
+        background: #27ae60;
+        color: white;
+      }
+      .btn-danger {
+        background: #e74c3c;
+        color: white;
+      }
+      .btn-warning {
+        background: #f39c12;
+        color: white;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="loginScreen">
+      <div
+        style="
+          max-width: 400px;
+          margin: 100px auto;
+          background: white;
+          padding: 30px;
+          border-radius: 15px;
+        "
+      >
+        <h2 style="text-align: center; margin-bottom: 20px">
+          🔐 Вход в админку
+        </h2>
+        <input
+          type="password"
+          id="adminPass"
+          placeholder="Пароль"
+          style="
+            width: 100%;
+            padding: 15px;
+            margin-bottom: 10px;
+            border: 2px solid #ddd;
+            border-radius: 10px;
+          "
+        />
+        <button
+          onclick="login()"
+          style="
+            width: 100%;
+            padding: 15px;
+            background: #2c3e50;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            cursor: pointer;
+          "
+        >
+          Войти
+        </button>
+      </div>
+    </div>
+
+    <div id="adminPanel" style="display: none">
+      <div class="header">
+        <h1>🪑 Админ-панель</h1>
+        <button onclick="logout()" class="btn btn-danger">Выйти</button>
+      </div>
+
+      <div class="stats" id="statsContainer"></div>
+
+      <div class="table-container">
+        <h3 style="margin-bottom: 15px">Все скамейки</h3>
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Название</th>
+              <th>Автор</th>
+              <th>Статус</th>
+              <th>Действия</th>
+            </tr>
+          </thead>
+          <tbody id="benchesTable"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <script>
+      const ADMIN_PASSWORD = "admin_tver_2024";
+
+      function login() {
+        if (document.getElementById("adminPass").value === ADMIN_PASSWORD) {
+          localStorage.setItem("admin_auth", "true");
+          document.getElementById("loginScreen").style.display = "none";
+          document.getElementById("adminPanel").style.display = "block";
+          loadData();
+        } else {
+          alert("Неверный пароль");
+        }
+      }
+
+      function logout() {
+        localStorage.removeItem("admin_auth");
+        location.reload();
+      }
+
+      function checkAuth() {
+        if (localStorage.getItem("admin_auth") === "true") {
+          document.getElementById("loginScreen").style.display = "none";
+          document.getElementById("adminPanel").style.display = "block";
+          loadData();
+        }
+      }
+
+      async function loadData() {
+        try {
+          const [benchesRes, statsRes] = await Promise.all([
+            fetch("/api/admin/benches"),
+            fetch("/api/stats"),
+          ]);
+
+          const benchesData = await benchesRes.json();
+          const statsData = await statsRes.json();
+
+          document.getElementById("statsContainer").innerHTML = `
+                    <div class="stat-card">
+                        <div>Всего скамеек</div>
+                        <div class="stat-value">${statsData.total_benches}</div>
+                    </div>
+                    <div class="stat-card">
+                        <div>Пользователей</div>
+                        <div class="stat-value">${statsData.total_users}</div>
+                    </div>
+                `;
+
+          const tbody = document.getElementById("benchesTable");
+          tbody.innerHTML = "";
+
+          benchesData.benches.forEach((bench) => {
+            const row = tbody.insertRow();
+            row.innerHTML = `
+                        <td>${bench.id}</td>
+                        <td><b>${bench.name}</b><br><small>${bench.description || ""}</small></td>
+                        <td>${bench.user_name || "Аноним"}</td>
+                        <td><span class="status status-${bench.status}">${bench.status}</span></td>
+                        <td>
+                            ${bench.status !== "active" ? `<button class="btn btn-success" onclick="updateStatus(${bench.id}, 'active')">✅</button>` : ""}
+                            ${bench.status !== "hidden" ? `<button class="btn btn-warning" onclick="updateStatus(${bench.id}, 'hidden')">👁️</button>` : ""}
+                            <button class="btn btn-danger" onclick="deleteBench(${bench.id})">🗑️</button>
+                        </td>
+                    `;
+          });
+        } catch (e) {
+          console.error(e);
+        }
+      }
+
+      async function updateStatus(id, status) {
+        await fetch(`/api/admin/benches/${id}/status`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status }),
+        });
+        loadData();
+      }
+
+      async function deleteBench(id) {
+        if (!confirm("Удалить?")) return;
+        await fetch(`/api/admin/benches/${id}`, { method: "DELETE" });
+        loadData();
+      }
+
+      checkAuth();
+    </script>
+  </body>
+</html>
