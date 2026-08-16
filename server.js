@@ -640,8 +640,31 @@ app.get("/api/stats", (req, res) => {
   }
 });
 
+// Миграция: добавляем отсутствующие колонки
+function migrateDatabase() {
+  try {
+    db.run(
+      "ALTER TABLE users ADD COLUMN total_reviews_received INTEGER DEFAULT 0",
+    );
+    console.log("Колонка total_reviews_received добавлена");
+  } catch (e) {
+    console.log("Колонка уже есть");
+  }
+  try {
+    db.run("ALTER TABLE benches ADD COLUMN ai_confidence REAL DEFAULT 0");
+  } catch (e) {}
+  try {
+    db.run("ALTER TABLE benches ADD COLUMN ai_reason TEXT");
+  } catch (e) {}
+  try {
+    db.run("ALTER TABLE benches ADD COLUMN rejection_reason TEXT");
+  } catch (e) {}
+  saveDatabase();
+}
+
 initDatabase().then(() => {
+  migrateDatabase();
   app.listen(PORT, () =>
-    console.log("бля опять эту рухлядь включать: http://localhost:" + PORT),
+    console.log("Сервер запущен: http://localhost:" + PORT),
   );
 });
