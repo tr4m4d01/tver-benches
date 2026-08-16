@@ -316,14 +316,25 @@ app.post("/api/benches/:id/review", (req, res) => {
     else if (rating == 3) repBonus = 1;
 
     if (repBonus > 0 && user_id) {
-      const repStmt = db.prepare(
-        "UPDATE users SET reputation = reputation + ?, total_reviews = total_reviews + 1 WHERE id = ?",
-      );
-      repStmt.bind([repBonus, user_id]);
-      repStmt.step();
-      repStmt.free();
-    }
+      // Получаем владельца скамейки
+      const benchStmt = db.prepare("SELECT user_id FROM benches WHERE id = ?");
+      benchStmt.bind([benchId]);
+      var benchOwnerId = null;
+      if (benchStmt.step()) {
+        benchOwnerId = benchStmt.getAsObject().user_id;
+      }
+      benchStmt.free();
 
+      // Начисляем репутацию владельцу скамейки
+      if (benchOwnerId) {
+        const repStmt = db.prepare(
+          "UPDATE users SET reputation = reputation + ? WHERE id = ?",
+        );
+        repStmt.bind([repBonus, benchOwnerId]);
+        repStmt.step();
+        repStmt.free();
+      }
+    }
     saveDatabase();
     res.json({ success: true, reputationBonus: repBonus });
   } catch (error) {

@@ -28,7 +28,6 @@
         --green: #27ae60;
         --red: #e74c3c;
       }
-
       * {
         margin: 0;
         padding: 0;
@@ -43,7 +42,6 @@
         background: var(--bg);
         color: var(--text);
       }
-
       #authScreen {
         position: fixed;
         top: 0;
@@ -60,7 +58,6 @@
       #authScreen.hidden {
         display: none;
       }
-
       .auth-card {
         background: var(--card);
         border: 1px solid var(--border);
@@ -81,7 +78,6 @@
         font-weight: 700;
         margin-bottom: 20px;
       }
-
       .auth-tabs {
         display: flex;
         gap: 10px;
@@ -103,7 +99,6 @@
         color: white;
         border-color: var(--primary);
       }
-
       .form-group {
         margin-bottom: 15px;
       }
@@ -131,7 +126,6 @@
       .form-group input:focus {
         border-color: var(--primary);
       }
-
       .btn {
         width: 100%;
         padding: 15px;
@@ -149,7 +143,6 @@
       .btn i {
         margin-right: 5px;
       }
-
       #mainApp {
         display: none;
         height: 100vh;
@@ -167,7 +160,6 @@
         right: 0;
         bottom: 0;
       }
-
       .search-container {
         position: absolute;
         top: 15px;
@@ -198,7 +190,6 @@
       .search-bar .fa-magnifying-glass {
         color: var(--gray);
       }
-
       #searchResultsList {
         background: var(--card);
         border: 1px solid var(--border);
@@ -212,7 +203,6 @@
       #searchResultsList.active {
         display: block;
       }
-
       .search-result-item {
         padding: 14px 15px;
         cursor: pointer;
@@ -252,7 +242,6 @@
         font-weight: 700;
         font-size: 0.85em;
       }
-
       .map-buttons {
         position: absolute;
         right: 15px;
@@ -283,7 +272,6 @@
         border-color: var(--primary);
         color: white;
       }
-
       .bench-card {
         position: absolute;
         bottom: 0;
@@ -324,7 +312,6 @@
         color: var(--green);
         font-weight: 700;
         margin-bottom: 10px;
-        font-size: 0.95em;
       }
       .bench-card-desc {
         color: var(--gray);
@@ -383,7 +370,6 @@
         justify-content: center;
         font-size: 1.2em;
       }
-
       #reviewsModal,
       #profileModal,
       #addModal {
@@ -433,7 +419,6 @@
         color: var(--gray);
         font-size: 0.9em;
       }
-
       .toast {
         position: fixed;
         top: 20px;
@@ -446,7 +431,6 @@
         z-index: 4000;
         font-weight: 600;
       }
-
       .overlay-modal {
         position: fixed;
         top: 0;
@@ -486,7 +470,7 @@
         </div>
         <div id="loginBox">
           <div class="form-group">
-            <label><i class="fa-solid fa-user"></i>Логин</label
+            <label><i class="fa-solid fa-user"></i>Логин (англ.)</label
             ><input type="text" id="loginLogin" />
           </div>
           <div class="form-group">
@@ -499,11 +483,15 @@
         </div>
         <div id="registerBox" style="display: none">
           <div class="form-group">
-            <label><i class="fa-solid fa-user"></i>Логин</label
+            <label
+              ><i class="fa-solid fa-user"></i>Логин (только англ. буквы и
+              цифры)</label
             ><input type="text" id="regLogin" />
           </div>
           <div class="form-group">
-            <label><i class="fa-solid fa-id-badge"></i>Никнейм</label
+            <label
+              ><i class="fa-solid fa-id-badge"></i>Никнейм (можно
+              русский)</label
             ><input type="text" id="regNickname" />
           </div>
           <div class="form-group">
@@ -516,23 +504,20 @@
         </div>
       </div>
     </div>
-
     <div id="mainApp">
       <div id="map"></div>
-
       <div class="search-container">
         <div class="search-bar">
-          <i class="fa-solid fa-magnifying-glass"></i>
-          <input
+          <i class="fa-solid fa-magnifying-glass"></i
+          ><input
             type="text"
-            placeholder="Поиск скамейки или улицы..."
+            placeholder="Поиск..."
             id="searchInput"
             oninput="searchBenches()"
           />
         </div>
         <div id="searchResultsList"></div>
       </div>
-
       <div class="map-buttons">
         <button class="map-btn" onclick="findMe()">
           <i class="fa-solid fa-location-crosshairs"></i>
@@ -547,13 +532,11 @@
           <i class="fa-solid fa-user"></i>
         </button>
       </div>
-
       <div class="bench-card" id="benchCard">
         <div class="bench-card-handle"></div>
         <div class="bench-card-content" id="benchCardContent"></div>
       </div>
     </div>
-
     <div id="reviewsModal">
       <div class="modal-content" id="reviewsContent"></div>
     </div>
@@ -577,6 +560,54 @@
         routeActive = false,
         watchId = null,
         reviewRating = 0;
+      var badWords = [
+        "блять",
+        "сука",
+        "хуй",
+        "пизда",
+        "ебать",
+        "еблан",
+        "нахуй",
+        "залупа",
+        "хер",
+        "мудак",
+        "пидор",
+        "гандон",
+        "шлюха",
+        "проститутка",
+        "жопа",
+        "срать",
+        "говно",
+        "дерьмо",
+        "ублюдок",
+        "тварь",
+        "мразь",
+        "сволочь",
+        "гадина",
+        "падла",
+        "чмо",
+        "лох",
+        "дебил",
+        "идиот",
+        "дурак",
+        "тупой",
+        "кретин",
+        "урод",
+        "скотина",
+      ];
+
+      function containsBadWords(text) {
+        if (!text) return false;
+        var lower = text.toLowerCase();
+        for (var i = 0; i < badWords.length; i++) {
+          if (lower.includes(badWords[i])) return true;
+        }
+        return false;
+      }
+
+      function isValidLatin(str) {
+        return /^[a-zA-Z0-9_]+$/.test(str);
+      }
 
       function createBenchIcon() {
         return {
@@ -624,7 +655,6 @@
         document.getElementById("registerBox").style.display = "block";
         document.getElementById("loginBox").style.display = "none";
       }
-
       function showToast(msg) {
         var old = document.querySelector(".toast");
         if (old) old.remove();
@@ -636,23 +666,9 @@
           toast.remove();
         }, 3000);
       }
-
-      function showOverlay(icon, color, title, message, buttons) {
+      function showOverlay(icon, color, title, message) {
         var overlay = document.createElement("div");
         overlay.className = "overlay-modal";
-        var btnHtml = "";
-        if (buttons) {
-          buttons.forEach(function (b) {
-            btnHtml +=
-              '<button onclick="' +
-              b.action +
-              '" style="width:100%;padding:15px;background:' +
-              (b.color || "var(--primary)") +
-              ';color:white;border:none;border-radius:12px;font-weight:700;cursor:pointer;margin-bottom:8px;">' +
-              b.text +
-              "</button>";
-          });
-        }
         overlay.innerHTML =
           '<div class="overlay-box"><div class="overlay-icon" style="color:' +
           color +
@@ -662,9 +678,7 @@
           title +
           '</h3><p style="color:var(--gray);margin-bottom:20px;">' +
           message +
-          "</p>" +
-          btnHtml +
-          "</div>";
+          '</p><button class="btn" onclick="closeOverlay(this)">OK</button></div>';
         document.body.appendChild(overlay);
       }
       function closeOverlay(el) {
@@ -672,13 +686,33 @@
       }
 
       async function doRegister() {
-        var login = document.getElementById("regLogin").value.trim(),
-          nickname = document.getElementById("regNickname").value.trim(),
-          password = document.getElementById("regPassword").value;
+        var login = document.getElementById("regLogin").value.trim();
+        var nickname = document.getElementById("regNickname").value.trim();
+        var password = document.getElementById("regPassword").value;
+
         if (!login || !nickname || !password) {
           showToast("Заполните все поля");
           return;
         }
+        if (!isValidLatin(login)) {
+          showOverlay(
+            "fa-circle-xmark",
+            "#e74c3c",
+            "Ошибка",
+            "Логин должен содержать только английские буквы и цифры!",
+          );
+          return;
+        }
+        if (containsBadWords(nickname)) {
+          showOverlay(
+            "fa-circle-xmark",
+            "#e74c3c",
+            "Ошибка",
+            "Никнейм содержит запрещённые слова!",
+          );
+          return;
+        }
+
         var response = await fetch("/api/register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -694,8 +728,7 @@
             "fa-circle-check",
             "#27ae60",
             "Успешно!",
-            "Регистрация завершена. Теперь войдите.",
-            [{ text: "OK", action: "closeOverlay(this)" }],
+            "Регистрация завершена. Войдите!",
           );
           showLogin();
           document.getElementById("loginLogin").value = login;
@@ -704,8 +737,7 @@
             "fa-circle-xmark",
             "#e74c3c",
             "Ошибка",
-            data.error || "Ошибка регистрации",
-            [{ text: "OK", action: "closeOverlay(this)" }],
+            data.error || "Ошибка",
           );
         }
       }
@@ -735,8 +767,7 @@
             "fa-circle-xmark",
             "#e74c3c",
             "Ошибка",
-            data.error || "Ошибка входа",
-            [{ text: "OK", action: "closeOverlay(this)" }],
+            data.error || "Ошибка",
           );
         }
       }
@@ -752,16 +783,11 @@
       }
 
       function logout() {
-        showOverlay(
-          "fa-right-from-bracket",
-          "#2d6da8",
-          "Выход",
-          "Вы уверены, что хотите выйти?",
-          [
-            { text: "Выйти", color: "#e74c3c", action: "doLogout()" },
-            { text: "Отмена", color: "#5a6b7d", action: "closeOverlay(this)" },
-          ],
-        );
+        var overlay = document.createElement("div");
+        overlay.className = "overlay-modal";
+        overlay.innerHTML =
+          '<div class="overlay-box"><div class="overlay-icon" style="color:var(--primary)"><i class="fa-solid fa-right-from-bracket"></i></div><h3 style="margin-bottom:10px;">Выход</h3><p style="color:var(--gray);margin-bottom:20px;">Вы уверены?</p><button onclick="doLogout()" style="width:100%;padding:15px;background:#e74c3c;color:white;border:none;border-radius:12px;font-weight:700;cursor:pointer;margin-bottom:8px;">Выйти</button><button onclick="closeOverlay(this)" style="width:100%;padding:10px;background:none;border:none;color:var(--gray);cursor:pointer;">Отмена</button></div>';
+        document.body.appendChild(overlay);
       }
       function doLogout() {
         currentUser = null;
@@ -789,31 +815,7 @@
             );
             myMap.geoObjects.add(userPlacemark);
             myMap.setCenter([userPosition.lat, userPosition.lng], 16);
-            if (routeActive) updateRoute();
           });
-        }
-      }
-
-      function watchPosition() {
-        if (navigator.geolocation && !watchId) {
-          watchId = navigator.geolocation.watchPosition(
-            function (pos) {
-              userPosition = {
-                lat: pos.coords.latitude,
-                lng: pos.coords.longitude,
-              };
-              if (userPlacemark) myMap.geoObjects.remove(userPlacemark);
-              userPlacemark = new ymaps.Placemark(
-                [userPosition.lat, userPosition.lng],
-                {},
-                createUserIcon(),
-              );
-              myMap.geoObjects.add(userPlacemark);
-              if (routeActive) updateRoute();
-            },
-            function () {},
-            { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 },
-          );
         }
       }
 
@@ -873,39 +875,38 @@
               .join("") +
             "</div>";
         }
-
-        document.getElementById("benchCardContent").innerHTML = `
-                <div style="display:flex;justify-content:space-between;align-items:start;gap:10px;">
-                    <div style="flex:1;">
-                        <div class="bench-card-title"><i class="fa-solid fa-chair"></i>${bench.name}</div>
-                        <div class="bench-card-distance"><i class="fa-solid fa-location-arrow"></i>${distanceText}</div>
-                    </div>
-                    <button class="close-card-btn" onclick="closeBenchCard()"><i class="fa-solid fa-xmark"></i></button>
-                </div>
-                ${bench.description ? '<div class="bench-card-desc">' + bench.description + "</div>" : ""}
-                <div style="color:var(--gray);font-size:0.85em;margin-bottom:5px;"><i class="fa-solid fa-user"></i> ${bench.user_name || "Аноним"}</div>
-                <div style="font-size:1.2em;">
-                    ${[1, 2, 3, 4, 5]
-                      .map(function (i) {
-                        return (
-                          '<i class="fa-solid fa-star" onclick="rateBench(' +
-                          bench.id +
-                          "," +
-                          i +
-                          ')" style="cursor:pointer;color:' +
-                          (i <= (bench.rating || 0) ? "#ffd700" : "#333") +
-                          ';"></i>'
-                        );
-                      })
-                      .join("")}
-                    <small style="color:var(--gray);">(${(bench.rating || 0).toFixed(1)})</small>
-                </div>
-                ${photosHtml}
-                <div class="bench-card-actions">
-                    <button class="bench-card-btn btn-route" onclick="buildRoute()"><i class="fa-solid fa-route"></i>Маршрут</button>
-                    <button class="bench-card-btn btn-reviews" onclick="openReviews(${bench.id})"><i class="fa-solid fa-comments"></i>Отзывы</button>
-                </div>
-            `;
+        document.getElementById("benchCardContent").innerHTML =
+          '<div style="display:flex;justify-content:space-between;align-items:start;gap:10px;"><div style="flex:1;"><div class="bench-card-title"><i class="fa-solid fa-chair"></i>' +
+          bench.name +
+          '</div><div class="bench-card-distance"><i class="fa-solid fa-location-arrow"></i>' +
+          distanceText +
+          '</div></div><button class="close-card-btn" onclick="closeBenchCard()"><i class="fa-solid fa-xmark"></i></button></div>' +
+          (bench.description
+            ? '<div class="bench-card-desc">' + bench.description + "</div>"
+            : "") +
+          '<div style="color:var(--gray);font-size:0.85em;margin-bottom:5px;"><i class="fa-solid fa-user"></i> ' +
+          bench.user_name +
+          '</div><div style="font-size:1.2em;">' +
+          [1, 2, 3, 4, 5]
+            .map(function (i) {
+              return (
+                '<i class="fa-solid fa-star" onclick="rateBench(' +
+                bench.id +
+                "," +
+                i +
+                ')" style="cursor:pointer;color:' +
+                (i <= (bench.rating || 0) ? "#ffd700" : "#333") +
+                ';"></i>'
+              );
+            })
+            .join("") +
+          '<small style="color:var(--gray);">(' +
+          (bench.rating || 0).toFixed(1) +
+          ")</small></div>" +
+          photosHtml +
+          '<div class="bench-card-actions"><button class="bench-card-btn btn-route" onclick="buildRoute()"><i class="fa-solid fa-route"></i>Маршрут</button><button class="bench-card-btn btn-reviews" onclick="openReviews(' +
+          bench.id +
+          ')"><i class="fa-solid fa-comments"></i>Отзывы</button></div>';
         document.getElementById("benchCard").classList.add("active");
         myMap.setCenter([bench.latitude, bench.longitude], 17);
       }
@@ -920,35 +921,18 @@
           showToast("Сначала определите местоположение");
           return;
         }
-        if (routeLine) myMap.geoObjects.remove(routeLine);
-        var multiRoute = new ymaps.multiRouter.MultiRoute({
-          referencePoints: [
-            [userPosition.lat, userPosition.lng],
-            [selectedBench.latitude, selectedBench.longitude],
-          ],
-          params: { routingMode: "pedestrian" },
-        });
-        myMap.geoObjects.add(multiRoute);
-        routeLine = multiRoute;
-        routeActive = true;
-        closeBenchCard();
-        myMap.setBounds(multiRoute.getBounds());
-        showToast("Маршрут построен!");
-        watchPosition();
-      }
-
-      function updateRoute() {
-        if (!selectedBench || !userPosition || !routeLine) return;
-        myMap.geoObjects.remove(routeLine);
-        var multiRoute = new ymaps.multiRouter.MultiRoute({
-          referencePoints: [
-            [userPosition.lat, userPosition.lng],
-            [selectedBench.latitude, selectedBench.longitude],
-          ],
-          params: { routingMode: "pedestrian" },
-        });
-        myMap.geoObjects.add(multiRoute);
-        routeLine = multiRoute;
+        var url =
+          "https://yandex.ru/maps/?rtext=" +
+          userPosition.lat +
+          "," +
+          userPosition.lng +
+          "~" +
+          selectedBench.latitude +
+          "," +
+          selectedBench.longitude +
+          "&rtt=pd";
+        window.open(url, "_blank");
+        showToast("Маршрут открыт!");
       }
 
       function rateBench(benchId, rating) {
@@ -1044,6 +1028,15 @@
           showToast("Поставьте оценку");
           return;
         }
+        if (containsBadWords(comment)) {
+          showOverlay(
+            "fa-circle-xmark",
+            "#e74c3c",
+            "Ошибка",
+            "Комментарий содержит запрещённые слова!",
+          );
+          return;
+        }
 
         fetch("/api/benches/" + benchId + "/review", {
           method: "POST",
@@ -1059,20 +1052,12 @@
           })
           .then(function (data) {
             if (data.success) {
-              // Удаляем ВСЕ оверлеи
-              var overlays = document.querySelectorAll(".overlay-modal");
-              overlays.forEach(function (el) {
-                el.remove();
-              });
-
-              var bonusMsg = "Отзыв отправлен!";
-              if (data.reputationBonus > 0) {
-                bonusMsg += " +" + data.reputationBonus + " репутации!";
-              }
-
-              // Показываем тост вместо оверлея
-              showToast(bonusMsg);
-
+              document
+                .querySelectorAll(".overlay-modal")
+                .forEach(function (el) {
+                  el.remove();
+                });
+              showToast("Отзыв отправлен!");
               reviewRating = 0;
               loadBenches();
             } else {
@@ -1080,6 +1065,7 @@
             }
           });
       }
+
       function searchBenches() {
         clearTimeout(searchTimeout);
         searchTimeout = setTimeout(function () {
@@ -1092,11 +1078,7 @@
           }
           searchResults = [];
           allBenches.forEach(function (bench) {
-            if (
-              bench.name.toLowerCase().includes(query.toLowerCase()) ||
-              (bench.description &&
-                bench.description.toLowerCase().includes(query.toLowerCase()))
-            ) {
+            if (bench.name.toLowerCase().includes(query.toLowerCase())) {
               var distText = "";
               if (userPosition) {
                 var dist = calculateDistance(
@@ -1122,38 +1104,6 @@
             }
           });
           showSearchResults();
-          try {
-            ymaps
-              .geocode("Тверь, " + query, { results: 2 })
-              .then(function (res) {
-                res.geoObjects.each(function (obj) {
-                  var coords = obj.geometry.getCoordinates();
-                  var address = obj.getAddressLine();
-                  var streetDist = "";
-                  if (userPosition) {
-                    var dist = calculateDistance(
-                      userPosition.lat,
-                      userPosition.lng,
-                      coords[0],
-                      coords[1],
-                    );
-                    streetDist =
-                      dist < 1
-                        ? Math.round(dist * 1000) + " м"
-                        : dist.toFixed(1) + " км";
-                  }
-                  searchResults.push({
-                    type: "street",
-                    icon: "fa-road",
-                    name: address,
-                    distance: streetDist,
-                    lat: coords[0],
-                    lng: coords[1],
-                  });
-                });
-                showSearchResults();
-              });
-          } catch (e) {}
         }, 300);
       }
 
@@ -1165,16 +1115,7 @@
           list.classList.remove("active");
           return;
         }
-        var unique = [];
-        var seen = {};
-        searchResults.forEach(function (r) {
-          var key = r.type + "_" + r.name;
-          if (!seen[key]) {
-            seen[key] = true;
-            unique.push(r);
-          }
-        });
-        unique.slice(0, 8).forEach(function (result) {
+        searchResults.slice(0, 8).forEach(function (result) {
           var item = document.createElement("div");
           item.className = "search-result-item";
           item.innerHTML =
@@ -1232,7 +1173,7 @@
           return;
         }
         document.getElementById("addModalContent").innerHTML =
-          '<h2 style="margin-bottom:20px;"><i class="fa-solid fa-plus" style="color:var(--primary);"></i> Новая скамейка</h2><div class="form-group"><label><i class="fa-solid fa-camera"></i>Фото</label><input type="file" id="modalPhotoInput" accept="image/*" multiple style="color:var(--gray);"><div id="photoPreview" style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;"></div></div><div class="form-group"><label><i class="fa-solid fa-pen"></i>Название</label><input type="text" id="modalBenchName"></div><div class="form-group"><label><i class="fa-solid fa-align-left"></i>Описание</label><textarea id="modalBenchDesc" rows="3"></textarea></div><button class="btn" onclick="saveBenchWithPhoto()"><i class="fa-solid fa-save"></i>Сохранить</button><button onclick="document.getElementById(\'addModal\').classList.remove(\'active\')" style="width:100%;padding:10px;margin-top:10px;background:none;border:none;color:var(--gray);cursor:pointer;">Отмена</button>';
+          '<h2 style="margin-bottom:20px;"><i class="fa-solid fa-plus" style="color:var(--primary);"></i> Новая скамейка</h2><div class="form-group"><label><i class="fa-solid fa-camera"></i>Фото (обязательно!)</label><input type="file" id="modalPhotoInput" accept="image/*" multiple style="color:var(--gray);"><div id="photoPreview" style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;"></div></div><div class="form-group"><label><i class="fa-solid fa-pen"></i>Название</label><input type="text" id="modalBenchName"></div><div class="form-group"><label><i class="fa-solid fa-align-left"></i>Описание</label><textarea id="modalBenchDesc" rows="3"></textarea></div><button class="btn" onclick="saveBenchWithPhoto()"><i class="fa-solid fa-save"></i>Сохранить</button><button onclick="document.getElementById(\'addModal\').classList.remove(\'active\')" style="width:100%;padding:10px;margin-top:10px;background:none;border:none;color:var(--gray);cursor:pointer;">Отмена</button>';
         document.getElementById("addModal").classList.add("active");
         document
           .getElementById("modalPhotoInput")
@@ -1259,10 +1200,39 @@
           .getElementById("modalBenchDesc")
           .value.trim();
         var photos = document.getElementById("modalPhotoInput").files;
+
         if (!name) {
           showToast("Введите название");
           return;
         }
+        if (photos.length === 0) {
+          showOverlay(
+            "fa-circle-xmark",
+            "#e74c3c",
+            "Ошибка",
+            "Фото обязательно! Добавьте хотя бы одно фото.",
+          );
+          return;
+        }
+        if (containsBadWords(name)) {
+          showOverlay(
+            "fa-circle-xmark",
+            "#e74c3c",
+            "Ошибка",
+            "Название содержит запрещённые слова!",
+          );
+          return;
+        }
+        if (containsBadWords(description)) {
+          showOverlay(
+            "fa-circle-xmark",
+            "#e74c3c",
+            "Ошибка",
+            "Описание содержит запрещённые слова!",
+          );
+          return;
+        }
+
         var formData = new FormData();
         formData.append("name", name);
         formData.append("description", description);
@@ -1273,6 +1243,7 @@
         for (var i = 0; i < photos.length; i++) {
           formData.append("photos", photos[i]);
         }
+
         fetch("/api/benches", { method: "POST", body: formData })
           .then(function (r) {
             return r.json();
@@ -1285,7 +1256,6 @@
                 "#27ae60",
                 "Успешно!",
                 "Скамейка отправлена на модерацию!",
-                [{ text: "OK", action: "closeOverlay(this)" }],
               );
             }
           });
@@ -1334,17 +1304,6 @@
         myMap.setCenter([lat, lng], 18);
         document.getElementById("profileModal").classList.remove("active");
       }
-
-      var benchCardEl = document.getElementById("benchCard");
-      var startY = 0;
-      benchCardEl.addEventListener("touchstart", function (e) {
-        startY = e.touches[0].clientY;
-      });
-      benchCardEl.addEventListener("touchmove", function (e) {
-        if (e.touches[0].clientY - startY > 50) {
-          closeBenchCard();
-        }
-      });
 
       checkAuth();
     </script>
