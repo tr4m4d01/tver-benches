@@ -2,26 +2,46 @@
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
     <title>Скамейки Твери</title>
 
+    <link
+      rel="stylesheet"
+      href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+    />
     <script
-      src="https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=be38b093-5948-4c54-8f05-c79926ec60ed
-"
+      src="https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=ВАШ_КЛЮЧ"
       type="text/javascript"
     ></script>
 
     <style>
+      :root {
+        --primary: #2d6da8;
+        --bg: #0a0e17;
+        --card: #0f1b2d;
+        --text: #ffffff;
+        --gray: #5a6b7d;
+        --border: #1e3a5f;
+        --green: #27ae60;
+        --red: #e74c3c;
+      }
+
       * {
         margin: 0;
         padding: 0;
         box-sizing: border-box;
       }
-
       body {
-        font-family: Arial, sans-serif;
+        font-family:
+          -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
         height: 100vh;
+        height: 100dvh;
         overflow: hidden;
+        background: var(--bg);
+        color: var(--text);
       }
 
       #authScreen {
@@ -30,36 +50,35 @@
         left: 0;
         right: 0;
         bottom: 0;
-        background: #2c3e50;
+        background: var(--bg);
         display: flex;
         align-items: center;
         justify-content: center;
-        z-index: 1000;
+        z-index: 5000;
         padding: 20px;
       }
-
       #authScreen.hidden {
         display: none;
       }
 
       .auth-card {
-        background: white;
+        background: var(--card);
+        border: 1px solid var(--border);
         border-radius: 20px;
         padding: 30px;
         width: 100%;
         max-width: 400px;
       }
-
       .auth-logo {
         text-align: center;
-        font-size: 3em;
+        font-size: 2.5em;
         margin-bottom: 10px;
+        color: var(--primary);
       }
       .auth-title {
         text-align: center;
         font-size: 1.5em;
         font-weight: 700;
-        color: #2c3e50;
         margin-bottom: 20px;
       }
 
@@ -72,14 +91,17 @@
         flex: 1;
         padding: 12px;
         text-align: center;
-        background: #f5f6fa;
+        background: var(--bg);
+        border: 1px solid var(--border);
         border-radius: 10px;
         cursor: pointer;
         font-weight: 600;
+        color: var(--gray);
       }
       .auth-tab.active {
-        background: #2a5298;
+        background: var(--primary);
         color: white;
+        border-color: var(--primary);
       }
 
       .form-group {
@@ -91,13 +113,23 @@
         margin-bottom: 5px;
         font-size: 0.9em;
       }
-      .form-group input {
+      .form-group label i {
+        margin-right: 5px;
+        color: var(--primary);
+      }
+      .form-group input,
+      .form-group textarea {
         width: 100%;
         padding: 14px;
-        border: 2px solid #e0e0e0;
+        border: 1px solid var(--border);
         border-radius: 12px;
         font-size: 1em;
         outline: none;
+        background: var(--bg);
+        color: var(--text);
+      }
+      .form-group input:focus {
+        border-color: var(--primary);
       }
 
       .btn {
@@ -105,177 +137,478 @@
         padding: 15px;
         border: none;
         border-radius: 12px;
-        font-size: 1.1em;
+        font-size: 1em;
         font-weight: 700;
         cursor: pointer;
-        background: #27ae60;
+        background: var(--primary);
         color: white;
+      }
+      .btn:active {
+        transform: scale(0.97);
+      }
+      .btn i {
+        margin-right: 5px;
       }
 
       #mainApp {
         display: none;
         height: 100vh;
+        height: 100dvh;
         flex-direction: column;
+        position: relative;
       }
       #mainApp.active {
         display: flex;
       }
-
-      .header {
-        background: #2c3e50;
-        color: white;
-        padding: 15px;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
+      #map {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
       }
 
-      .header-user {
+      .search-container {
+        position: absolute;
+        top: 15px;
+        left: 15px;
+        right: 15px;
+        z-index: 2000;
+      }
+      .search-bar {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 15px;
+        padding: 12px 15px;
         display: flex;
         align-items: center;
         gap: 10px;
       }
-      .avatar {
+      .search-bar input {
+        flex: 1;
+        border: none;
+        outline: none;
+        font-size: 1em;
+        color: var(--text);
+        background: transparent;
+      }
+      .search-bar input::placeholder {
+        color: var(--gray);
+      }
+      .search-bar .fa-magnifying-glass {
+        color: var(--gray);
+      }
+
+      #searchResultsList {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        z-index: 2500;
+        max-height: 350px;
+        overflow-y: auto;
+        display: none;
+        margin-top: 5px;
+      }
+      #searchResultsList.active {
+        display: block;
+      }
+
+      .search-result-item {
+        padding: 14px 15px;
+        cursor: pointer;
+        border-bottom: 1px solid var(--border);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        color: var(--text);
+      }
+      .search-result-item:hover {
+        background: var(--bg);
+      }
+      .search-result-item:last-child {
+        border-bottom: none;
+      }
+      .search-result-item .result-icon {
         width: 40px;
         height: 40px;
-        border-radius: 50%;
-        background: #27ae60;
+        border-radius: 10px;
+        background: var(--bg);
         display: flex;
         align-items: center;
         justify-content: center;
-        font-weight: 700;
-        font-size: 1.3em;
+        font-size: 1.1em;
+        color: var(--primary);
+        flex-shrink: 0;
       }
-
-      #map {
+      .search-result-item .result-info {
         flex: 1;
-        width: 100%;
+      }
+      .search-result-item .result-name {
+        font-weight: 600;
+        font-size: 0.95em;
+      }
+      .search-result-item .result-distance {
+        color: var(--green);
+        font-weight: 700;
+        font-size: 0.85em;
       }
 
-      .controls {
-        background: white;
-        padding: 10px;
+      .map-buttons {
+        position: absolute;
+        right: 15px;
+        top: 80px;
+        z-index: 1000;
         display: flex;
+        flex-direction: column;
         gap: 10px;
       }
+      .map-btn {
+        width: 50px;
+        height: 50px;
+        border-radius: 50%;
+        background: var(--card);
+        border: 1px solid var(--border);
+        cursor: pointer;
+        font-size: 1.1em;
+        color: var(--text);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      .map-btn:active {
+        transform: scale(0.9);
+      }
+      .map-btn.primary {
+        background: var(--primary);
+        border-color: var(--primary);
+        color: white;
+      }
 
-      .controls button {
+      .bench-card {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 20px 20px 0 0;
+        z-index: 1500;
+        max-height: 75vh;
+        overflow-y: auto;
+        transform: translateY(100%);
+        transition: transform 0.3s ease;
+      }
+      .bench-card.active {
+        transform: translateY(0);
+      }
+      .bench-card-handle {
+        width: 40px;
+        height: 4px;
+        background: var(--gray);
+        border-radius: 2px;
+        margin: 10px auto;
+      }
+      .bench-card-content {
+        padding: 0 20px 20px;
+      }
+      .bench-card-title {
+        font-size: 1.3em;
+        font-weight: 700;
+        margin-bottom: 5px;
+      }
+      .bench-card-title i {
+        color: var(--primary);
+        margin-right: 8px;
+      }
+      .bench-card-distance {
+        color: var(--green);
+        font-weight: 700;
+        margin-bottom: 10px;
+        font-size: 0.95em;
+      }
+      .bench-card-desc {
+        color: var(--gray);
+        margin-bottom: 10px;
+      }
+      .bench-card-photos {
+        display: flex;
+        gap: 10px;
+        overflow-x: auto;
+        padding: 10px 0;
+      }
+      .bench-card-photos img {
+        width: 150px;
+        height: 150px;
+        object-fit: cover;
+        border-radius: 12px;
+        cursor: pointer;
+        flex-shrink: 0;
+      }
+      .bench-card-actions {
+        display: flex;
+        gap: 10px;
+        margin-top: 15px;
+      }
+      .bench-card-btn {
         flex: 1;
-        padding: 15px;
+        padding: 14px;
         border: none;
         border-radius: 12px;
-        font-size: 0.95em;
-        font-weight: 600;
+        font-weight: 700;
         cursor: pointer;
+        font-size: 0.95em;
+      }
+      .bench-card-btn i {
+        margin-right: 5px;
+      }
+      .btn-route {
+        background: var(--primary);
+        color: white;
+      }
+      .btn-reviews {
+        background: var(--bg);
+        color: var(--text);
+        border: 1px solid var(--border);
+      }
+      .close-card-btn {
+        background: var(--bg);
+        border: 1px solid var(--border);
+        color: var(--text);
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2em;
       }
 
-      .btn-blue {
-        background: #3498db;
-        color: white;
+      #reviewsModal,
+      #profileModal,
+      #addModal {
+        display: none;
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.7);
+        z-index: 3000;
+        align-items: flex-end;
       }
-      .btn-green {
-        background: #27ae60;
-        color: white;
+      #reviewsModal.active,
+      #profileModal.active,
+      #addModal.active {
+        display: flex;
       }
-      .btn-outline {
-        background: white;
-        color: #2a5298;
-        border: 2px solid #2a5298;
+      .modal-content {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 20px 20px 0 0;
+        padding: 25px;
+        width: 100%;
+        max-height: 90vh;
+        overflow-y: auto;
+      }
+      .review-item {
+        padding: 15px;
+        background: var(--bg);
+        border-radius: 12px;
+        margin-bottom: 10px;
+      }
+      .review-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 5px;
+      }
+      .review-user {
+        font-weight: 700;
+      }
+      .review-stars {
+        color: #ffd700;
+      }
+      .review-comment {
+        color: var(--gray);
+        font-size: 0.9em;
       }
 
       .toast {
         position: fixed;
-        top: 70px;
+        top: 20px;
         left: 50%;
         transform: translateX(-50%);
-        background: #2c3e50;
+        background: var(--primary);
         color: white;
         padding: 12px 20px;
         border-radius: 10px;
-        z-index: 3000;
+        z-index: 4000;
         font-weight: 600;
+      }
+
+      .overlay-modal {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: rgba(0, 0, 0, 0.8);
+        z-index: 4000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
+      }
+      .overlay-box {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 20px;
+        padding: 25px;
+        text-align: center;
+        max-width: 350px;
+        width: 100%;
+      }
+      .overlay-icon {
+        font-size: 3em;
+        margin-bottom: 15px;
       }
     </style>
   </head>
   <body>
     <div id="authScreen">
       <div class="auth-card">
-        <div class="auth-logo">🪑</div>
+        <div class="auth-logo"><i class="fa-solid fa-chair"></i></div>
         <div class="auth-title">Скамейки Твери</div>
-
         <div class="auth-tabs">
           <div class="auth-tab active" onclick="showLogin()">Вход</div>
           <div class="auth-tab" onclick="showRegister()">Регистрация</div>
         </div>
-
         <div id="loginBox">
           <div class="form-group">
-            <label>Логин</label>
-            <input type="text" id="loginLogin" />
+            <label><i class="fa-solid fa-user"></i>Логин</label
+            ><input type="text" id="loginLogin" />
           </div>
           <div class="form-group">
-            <label>Пароль</label>
-            <input type="password" id="loginPassword" />
+            <label><i class="fa-solid fa-lock"></i>Пароль</label
+            ><input type="password" id="loginPassword" />
           </div>
-          <button class="btn" onclick="doLogin()">Войти</button>
+          <button class="btn" onclick="doLogin()">
+            <i class="fa-solid fa-right-to-bracket"></i>Войти
+          </button>
         </div>
-
         <div id="registerBox" style="display: none">
           <div class="form-group">
-            <label>Логин</label>
-            <input type="text" id="regLogin" />
+            <label><i class="fa-solid fa-user"></i>Логин</label
+            ><input type="text" id="regLogin" />
           </div>
           <div class="form-group">
-            <label>Никнейм</label>
-            <input type="text" id="regNickname" />
+            <label><i class="fa-solid fa-id-badge"></i>Никнейм</label
+            ><input type="text" id="regNickname" />
           </div>
           <div class="form-group">
-            <label>Пароль</label>
-            <input type="password" id="regPassword" />
+            <label><i class="fa-solid fa-lock"></i>Пароль</label
+            ><input type="password" id="regPassword" />
           </div>
-          <button class="btn" onclick="doRegister()">Зарегистрироваться</button>
+          <button class="btn" onclick="doRegister()">
+            <i class="fa-solid fa-user-plus"></i>Зарегистрироваться
+          </button>
         </div>
       </div>
     </div>
 
     <div id="mainApp">
-      <div class="header">
-        <div class="header-user">
-          <div class="avatar" id="headerAvatar">👤</div>
-          <div>
-            <div style="font-weight: 700" id="headerName"></div>
-            <div style="font-size: 0.8em; opacity: 0.8" id="headerLogin"></div>
-          </div>
-        </div>
-        <div id="headerReputation">⭐ 0</div>
-      </div>
-
       <div id="map"></div>
 
-      <div class="controls">
-        <button class="btn-blue" onclick="findMe()">📍 Я тут</button>
-        <button class="btn-green" onclick="addBench()">➕ Добавить</button>
-        <button class="btn-outline" onclick="loadBenches()">🔄</button>
-        <button class="btn-outline" onclick="logout()" style="max-width: 60px">
-          🚪
+      <div class="search-container">
+        <div class="search-bar">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <input
+            type="text"
+            placeholder="Поиск скамейки или улицы..."
+            id="searchInput"
+            oninput="searchBenches()"
+          />
+        </div>
+        <div id="searchResultsList"></div>
+      </div>
+
+      <div class="map-buttons">
+        <button class="map-btn" onclick="findMe()">
+          <i class="fa-solid fa-location-crosshairs"></i>
         </button>
+        <button class="map-btn primary" onclick="openAddModal()">
+          <i class="fa-solid fa-plus"></i>
+        </button>
+        <button class="map-btn" onclick="loadBenches()">
+          <i class="fa-solid fa-rotate"></i>
+        </button>
+        <button class="map-btn" onclick="openProfile()">
+          <i class="fa-solid fa-user"></i>
+        </button>
+      </div>
+
+      <div class="bench-card" id="benchCard">
+        <div class="bench-card-handle"></div>
+        <div class="bench-card-content" id="benchCardContent"></div>
       </div>
     </div>
 
-    <script>
-      var currentUser = null;
-      var userPosition = null;
-      var myMap = null;
-      var userPlacemark = null;
+    <div id="reviewsModal">
+      <div class="modal-content" id="reviewsContent"></div>
+    </div>
+    <div id="profileModal">
+      <div class="modal-content" id="profileContent"></div>
+    </div>
+    <div id="addModal">
+      <div class="modal-content" id="addModalContent"></div>
+    </div>
 
-      // Инициализация Яндекс.Карты
+    <script>
+      var currentUser = null,
+        userPosition = null,
+        myMap = null,
+        userPlacemark = null,
+        allBenches = [],
+        selectedBench = null,
+        routeLine = null,
+        searchResults = [],
+        searchTimeout = null,
+        routeActive = false,
+        watchId = null,
+        reviewRating = 0;
+
+      function createBenchIcon() {
+        return {
+          iconLayout: "default#image",
+          iconImageHref:
+            "data:image/svg+xml;base64," +
+            btoa(
+              '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect x="8" y="40" width="48" height="5" rx="2.5" fill="#2d6da8"/><rect x="12" y="18" width="40" height="5" rx="2.5" fill="#3d8bd0"/><rect x="10" y="18" width="5" height="27" rx="2.5" fill="#1e4d7a"/><rect x="49" y="18" width="5" height="27" rx="2.5" fill="#1e4d7a"/><rect x="8" y="45" width="5" height="14" rx="2.5" fill="#1e4d7a"/><rect x="51" y="45" width="5" height="14" rx="2.5" fill="#1e4d7a"/></svg>',
+            ),
+          iconImageSize: [40, 40],
+          iconImageOffset: [-20, -40],
+        };
+      }
+      function createUserIcon() {
+        return {
+          iconLayout: "default#image",
+          iconImageHref:
+            "data:image/svg+xml;base64," +
+            btoa(
+              '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><path d="M32 2 C18 14 8 26 8 40 C8 53 18 62 32 62 C46 62 56 53 56 40 C56 26 46 14 32 2 Z" fill="#3498db" stroke="white" stroke-width="2"/><circle cx="32" cy="38" r="13" fill="white"/><circle cx="32" cy="38" r="7" fill="#3498db"/></svg>',
+            ),
+          iconImageSize: [45, 45],
+          iconImageOffset: [-22, -45],
+        };
+      }
+
       ymaps.ready(function () {
         myMap = new ymaps.Map("map", {
           center: [56.8587, 35.9176],
           zoom: 13,
-          controls: ["zoomControl"],
+          controls: [],
         });
-        console.log("Яндекс.Карта загружена!");
         loadBenches();
       });
 
@@ -285,7 +618,6 @@
         document.getElementById("loginBox").style.display = "block";
         document.getElementById("registerBox").style.display = "none";
       }
-
       function showRegister() {
         document.querySelectorAll(".auth-tab")[1].classList.add("active");
         document.querySelectorAll(".auth-tab")[0].classList.remove("active");
@@ -305,89 +637,108 @@
         }, 3000);
       }
 
-      async function doRegister() {
-        var login = document.getElementById("regLogin").value.trim();
-        var nickname = document.getElementById("regNickname").value.trim();
-        var password = document.getElementById("regPassword").value;
+      function showOverlay(icon, color, title, message, buttons) {
+        var overlay = document.createElement("div");
+        overlay.className = "overlay-modal";
+        var btnHtml = "";
+        if (buttons) {
+          buttons.forEach(function (b) {
+            btnHtml +=
+              '<button onclick="' +
+              b.action +
+              '" style="width:100%;padding:15px;background:' +
+              (b.color || "var(--primary)") +
+              ';color:white;border:none;border-radius:12px;font-weight:700;cursor:pointer;margin-bottom:8px;">' +
+              b.text +
+              "</button>";
+          });
+        }
+        overlay.innerHTML =
+          '<div class="overlay-box"><div class="overlay-icon" style="color:' +
+          color +
+          '"><i class="fa-solid ' +
+          icon +
+          '"></i></div><h3 style="margin-bottom:10px;">' +
+          title +
+          '</h3><p style="color:var(--gray);margin-bottom:20px;">' +
+          message +
+          "</p>" +
+          btnHtml +
+          "</div>";
+        document.body.appendChild(overlay);
+      }
+      function closeOverlay(el) {
+        el.closest(".overlay-modal").remove();
+      }
 
+      async function doRegister() {
+        var login = document.getElementById("regLogin").value.trim(),
+          nickname = document.getElementById("regNickname").value.trim(),
+          password = document.getElementById("regPassword").value;
         if (!login || !nickname || !password) {
           showToast("Заполните все поля");
           return;
         }
-
-        try {
-          var response = await fetch("/api/register", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              login: login,
-              password: password,
-              nickname: nickname,
-            }),
-          });
-          var data = await response.json();
-
-          if (data.success) {
-            showToast("Регистрация успешна! Войдите");
-            showLogin();
-            document.getElementById("loginLogin").value = login;
-          } else {
-            showToast(data.error || "Ошибка");
-          }
-        } catch (e) {
-          showToast("Ошибка соединения");
+        var response = await fetch("/api/register", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            login: login,
+            password: password,
+            nickname: nickname,
+          }),
+        });
+        var data = await response.json();
+        if (data.success) {
+          showOverlay(
+            "fa-circle-check",
+            "#27ae60",
+            "Успешно!",
+            "Регистрация завершена. Теперь войдите.",
+            [{ text: "OK", action: "closeOverlay(this)" }],
+          );
+          showLogin();
+          document.getElementById("loginLogin").value = login;
+        } else {
+          showOverlay(
+            "fa-circle-xmark",
+            "#e74c3c",
+            "Ошибка",
+            data.error || "Ошибка регистрации",
+            [{ text: "OK", action: "closeOverlay(this)" }],
+          );
         }
       }
 
       async function doLogin() {
-        var login = document.getElementById("loginLogin").value.trim();
-        var password = document.getElementById("loginPassword").value;
-
+        var login = document.getElementById("loginLogin").value.trim(),
+          password = document.getElementById("loginPassword").value;
         if (!login || !password) {
           showToast("Введите логин и пароль");
           return;
         }
-
-        try {
-          var response = await fetch("/api/login", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ login: login, password: password }),
-          });
-          var data = await response.json();
-
-          if (data.success) {
-            currentUser = data.user;
-            localStorage.setItem("tver_user", JSON.stringify(currentUser));
-
-            document.getElementById("headerAvatar").textContent =
-              currentUser.nickname.charAt(0).toUpperCase();
-            document.getElementById("headerName").textContent =
-              currentUser.nickname;
-            document.getElementById("headerLogin").textContent =
-              "@" + currentUser.login;
-            document.getElementById("headerReputation").textContent =
-              "⭐ " + currentUser.reputation;
-
-            document.getElementById("authScreen").classList.add("hidden");
-            document.getElementById("mainApp").classList.add("active");
-
-            showToast("Добро пожаловать!");
-            loadBenches();
-            setTimeout(findMe, 1000);
-          } else {
-            showToast(data.error || "Ошибка входа");
-          }
-        } catch (e) {
-          showToast("Ошибка соединения");
+        var response = await fetch("/api/login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ login: login, password: password }),
+        });
+        var data = await response.json();
+        if (data.success) {
+          currentUser = data.user;
+          localStorage.setItem("tver_user", JSON.stringify(currentUser));
+          document.getElementById("authScreen").classList.add("hidden");
+          document.getElementById("mainApp").classList.add("active");
+          loadBenches();
+          setTimeout(findMe, 1000);
+        } else {
+          showOverlay(
+            "fa-circle-xmark",
+            "#e74c3c",
+            "Ошибка",
+            data.error || "Ошибка входа",
+            [{ text: "OK", action: "closeOverlay(this)" }],
+          );
         }
-      }
-
-      function logout() {
-        currentUser = null;
-        localStorage.removeItem("tver_user");
-        document.getElementById("authScreen").classList.remove("hidden");
-        document.getElementById("mainApp").classList.remove("active");
       }
 
       function checkAuth() {
@@ -396,16 +747,31 @@
           currentUser = JSON.parse(saved);
           document.getElementById("authScreen").classList.add("hidden");
           document.getElementById("mainApp").classList.add("active");
-          document.getElementById("headerAvatar").textContent =
-            currentUser.nickname.charAt(0).toUpperCase();
-          document.getElementById("headerName").textContent =
-            currentUser.nickname;
-          document.getElementById("headerLogin").textContent =
-            "@" + currentUser.login;
-          document.getElementById("headerReputation").textContent =
-            "⭐ " + currentUser.reputation;
           setTimeout(findMe, 1000);
         }
+      }
+
+      function logout() {
+        showOverlay(
+          "fa-right-from-bracket",
+          "#2d6da8",
+          "Выход",
+          "Вы уверены, что хотите выйти?",
+          [
+            { text: "Выйти", color: "#e74c3c", action: "doLogout()" },
+            { text: "Отмена", color: "#5a6b7d", action: "closeOverlay(this)" },
+          ],
+        );
+      }
+      function doLogout() {
+        currentUser = null;
+        localStorage.removeItem("tver_user");
+        document.getElementById("authScreen").classList.remove("hidden");
+        document.getElementById("mainApp").classList.remove("active");
+        document.getElementById("profileModal").classList.remove("active");
+        document.querySelectorAll(".overlay-modal").forEach(function (el) {
+          el.remove();
+        });
       }
 
       function findMe() {
@@ -415,119 +781,471 @@
               lat: pos.coords.latitude,
               lng: pos.coords.longitude,
             };
-
             if (userPlacemark) myMap.geoObjects.remove(userPlacemark);
-
             userPlacemark = new ymaps.Placemark(
               [userPosition.lat, userPosition.lng],
-              { balloonContent: "Вы здесь" },
-              { preset: "islands#blueCircleIcon" },
+              {},
+              createUserIcon(),
             );
-
             myMap.geoObjects.add(userPlacemark);
             myMap.setCenter([userPosition.lat, userPosition.lng], 16);
-            showToast("✅ Вы здесь!");
+            if (routeActive) updateRoute();
           });
+        }
+      }
+
+      function watchPosition() {
+        if (navigator.geolocation && !watchId) {
+          watchId = navigator.geolocation.watchPosition(
+            function (pos) {
+              userPosition = {
+                lat: pos.coords.latitude,
+                lng: pos.coords.longitude,
+              };
+              if (userPlacemark) myMap.geoObjects.remove(userPlacemark);
+              userPlacemark = new ymaps.Placemark(
+                [userPosition.lat, userPosition.lng],
+                {},
+                createUserIcon(),
+              );
+              myMap.geoObjects.add(userPlacemark);
+              if (routeActive) updateRoute();
+            },
+            function () {},
+            { enableHighAccuracy: true, maximumAge: 0, timeout: 5000 },
+          );
         }
       }
 
       function loadBenches() {
         if (!myMap) return;
-
         fetch("/api/benches")
           .then(function (r) {
             return r.json();
           })
           .then(function (data) {
             if (!data.success) return;
-
+            allBenches = data.benches;
             myMap.geoObjects.removeAll();
-
             data.benches.forEach(function (bench) {
               var placemark = new ymaps.Placemark(
                 [bench.latitude, bench.longitude],
-                {
-                  balloonContent:
-                    "<b>" +
-                    bench.name +
-                    "</b><br>" +
-                    (bench.description || "") +
-                    "<br>" +
-                    "<small>👤 " +
-                    (bench.user_name || "Аноним") +
-                    "</small>",
-                },
-                { preset: "islands#greenIcon" },
+                {},
+                createBenchIcon(),
               );
+              placemark.events.add("click", function () {
+                showBenchCard(bench);
+              });
               myMap.geoObjects.add(placemark);
             });
           });
       }
 
-      function addBench() {
+      function showBenchCard(bench) {
+        selectedBench = bench;
+        var distanceText = "";
+        if (userPosition) {
+          var dist = calculateDistance(
+            userPosition.lat,
+            userPosition.lng,
+            bench.latitude,
+            bench.longitude,
+          );
+          distanceText =
+            dist < 1
+              ? Math.round(dist * 1000) + " м от вас"
+              : dist.toFixed(1) + " км от вас";
+        }
+        var photosHtml = "";
+        if (bench.photos && bench.photos.length > 0) {
+          photosHtml =
+            '<div class="bench-card-photos">' +
+            bench.photos
+              .map(function (photo) {
+                return (
+                  '<img src="' +
+                  photo.photo_url +
+                  '" onclick="openPhoto(\'' +
+                  photo.photo_url +
+                  "')\">"
+                );
+              })
+              .join("") +
+            "</div>";
+        }
+
+        document.getElementById("benchCardContent").innerHTML = `
+                <div style="display:flex;justify-content:space-between;align-items:start;gap:10px;">
+                    <div style="flex:1;">
+                        <div class="bench-card-title"><i class="fa-solid fa-chair"></i>${bench.name}</div>
+                        <div class="bench-card-distance"><i class="fa-solid fa-location-arrow"></i>${distanceText}</div>
+                    </div>
+                    <button class="close-card-btn" onclick="closeBenchCard()"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                ${bench.description ? '<div class="bench-card-desc">' + bench.description + "</div>" : ""}
+                <div style="color:var(--gray);font-size:0.85em;margin-bottom:5px;"><i class="fa-solid fa-user"></i> ${bench.user_name || "Аноним"}</div>
+                <div style="font-size:1.2em;">
+                    ${[1, 2, 3, 4, 5]
+                      .map(function (i) {
+                        return (
+                          '<i class="fa-solid fa-star" onclick="rateBench(' +
+                          bench.id +
+                          "," +
+                          i +
+                          ')" style="cursor:pointer;color:' +
+                          (i <= (bench.rating || 0) ? "#ffd700" : "#333") +
+                          ';"></i>'
+                        );
+                      })
+                      .join("")}
+                    <small style="color:var(--gray);">(${(bench.rating || 0).toFixed(1)})</small>
+                </div>
+                ${photosHtml}
+                <div class="bench-card-actions">
+                    <button class="bench-card-btn btn-route" onclick="buildRoute()"><i class="fa-solid fa-route"></i>Маршрут</button>
+                    <button class="bench-card-btn btn-reviews" onclick="openReviews(${bench.id})"><i class="fa-solid fa-comments"></i>Отзывы</button>
+                </div>
+            `;
+        document.getElementById("benchCard").classList.add("active");
+        myMap.setCenter([bench.latitude, bench.longitude], 17);
+      }
+
+      function closeBenchCard() {
+        document.getElementById("benchCard").classList.remove("active");
+        selectedBench = null;
+      }
+
+      function buildRoute() {
+        if (!selectedBench || !userPosition) {
+          showToast("Сначала определите местоположение");
+          return;
+        }
+        if (routeLine) myMap.geoObjects.remove(routeLine);
+        var multiRoute = new ymaps.multiRouter.MultiRoute({
+          referencePoints: [
+            [userPosition.lat, userPosition.lng],
+            [selectedBench.latitude, selectedBench.longitude],
+          ],
+          params: { routingMode: "pedestrian" },
+        });
+        myMap.geoObjects.add(multiRoute);
+        routeLine = multiRoute;
+        routeActive = true;
+        closeBenchCard();
+        myMap.setBounds(multiRoute.getBounds());
+        showToast("Маршрут построен!");
+        watchPosition();
+      }
+
+      function updateRoute() {
+        if (!selectedBench || !userPosition || !routeLine) return;
+        myMap.geoObjects.remove(routeLine);
+        var multiRoute = new ymaps.multiRouter.MultiRoute({
+          referencePoints: [
+            [userPosition.lat, userPosition.lng],
+            [selectedBench.latitude, selectedBench.longitude],
+          ],
+          params: { routingMode: "pedestrian" },
+        });
+        myMap.geoObjects.add(multiRoute);
+        routeLine = multiRoute;
+      }
+
+      function rateBench(benchId, rating) {
         if (!currentUser) {
           showToast("Сначала войдите");
           return;
         }
+        fetch("/api/benches/" + benchId + "/rate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ rating: rating, user_id: currentUser.id }),
+        })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (data) {
+            if (data.success) {
+              showToast("Спасибо за оценку!");
+              loadBenches();
+              closeBenchCard();
+            }
+          });
+      }
 
-        if (!userPosition) {
-          showToast('Нажмите "Я тут" сначала');
+      function openReviews(benchId) {
+        fetch("/api/benches/" + benchId + "/reviews")
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (data) {
+            var reviews = data.reviews || [];
+            var html =
+              '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;"><h2><i class="fa-solid fa-comments" style="color:var(--primary);"></i> Отзывы</h2><button onclick="document.getElementById(\'reviewsModal\').classList.remove(\'active\')" style="background:none;border:none;color:var(--text);font-size:24px;cursor:pointer;"><i class="fa-solid fa-xmark"></i></button></div>';
+            if (reviews.length === 0) {
+              html +=
+                '<p style="color:var(--gray);text-align:center;padding:20px;">Пока нет отзывов</p>';
+            } else {
+              reviews.forEach(function (rev) {
+                var stars = "";
+                for (var s = 1; s <= 5; s++) {
+                  stars +=
+                    '<i class="fa-solid fa-star" style="color:' +
+                    (s <= rev.rating ? "#ffd700" : "#333") +
+                    ';font-size:0.9em;"></i>';
+                }
+                html +=
+                  '<div class="review-item"><div class="review-header"><span class="review-user"><i class="fa-solid fa-user"></i> ' +
+                  (rev.nickname || "Аноним") +
+                  "</span><span>" +
+                  stars +
+                  "</span></div>" +
+                  (rev.comment
+                    ? '<div class="review-comment">' + rev.comment + "</div>"
+                    : "") +
+                  "</div>";
+              });
+            }
+            html +=
+              '<button class="btn" onclick="openAddReview(' +
+              benchId +
+              ')"><i class="fa-solid fa-pen"></i>Оставить отзыв</button>';
+            document.getElementById("reviewsContent").innerHTML = html;
+            document.getElementById("reviewsModal").classList.add("active");
+          });
+      }
+
+      function openAddReview(benchId) {
+        reviewRating = 0;
+        document.getElementById("reviewsModal").classList.remove("active");
+        var modal = document.createElement("div");
+        modal.className = "overlay-modal";
+        modal.id = "addReviewModal";
+        modal.innerHTML =
+          '<div class="overlay-box" style="text-align:left;max-width:400px;"><h3 style="margin-bottom:15px;"><i class="fa-solid fa-pen" style="color:var(--primary);"></i> Оставить отзыв</h3><div style="margin-bottom:15px;"><label style="font-weight:600;display:block;margin-bottom:10px;">Оценка</label><div id="reviewStars" style="font-size:2em;"><i class="fa-solid fa-star" onclick="setReviewRating(1)" style="cursor:pointer;color:#333;"></i><i class="fa-solid fa-star" onclick="setReviewRating(2)" style="cursor:pointer;color:#333;"></i><i class="fa-solid fa-star" onclick="setReviewRating(3)" style="cursor:pointer;color:#333;"></i><i class="fa-solid fa-star" onclick="setReviewRating(4)" style="cursor:pointer;color:#333;"></i><i class="fa-solid fa-star" onclick="setReviewRating(5)" style="cursor:pointer;color:#333;"></i></div></div><div style="margin-bottom:15px;"><label style="font-weight:600;display:block;margin-bottom:5px;">Комментарий</label><textarea id="reviewCommentInput" rows="4" style="width:100%;padding:14px;border:1px solid var(--border);border-radius:12px;background:var(--bg);color:var(--text);"></textarea></div><button class="btn" onclick="submitReview(' +
+          benchId +
+          ')"><i class="fa-solid fa-paper-plane"></i>Отправить</button><button onclick="closeOverlay(this)" style="width:100%;padding:10px;margin-top:10px;background:none;border:none;color:var(--gray);cursor:pointer;">Отмена</button></div>';
+        document.body.appendChild(modal);
+      }
+
+      function setReviewRating(r) {
+        reviewRating = r;
+        var stars = document.querySelectorAll("#reviewStars .fa-star");
+        stars.forEach(function (s, i) {
+          s.style.color = i < r ? "#ffd700" : "#333";
+        });
+      }
+
+      function submitReview(benchId) {
+        var comment = document
+          .getElementById("reviewCommentInput")
+          .value.trim();
+        if (!reviewRating) {
+          showToast("Поставьте оценку");
           return;
         }
 
-        // Создаём модальное окно
-        var modal = document.createElement("div");
-        modal.style.cssText =
-          "position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 5000; display: flex; align-items: center; justify-content: center; padding: 20px;";
+        fetch("/api/benches/" + benchId + "/review", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            rating: reviewRating,
+            comment: comment,
+            user_id: currentUser.id,
+          }),
+        })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (data) {
+            if (data.success) {
+              // Удаляем ВСЕ оверлеи
+              var overlays = document.querySelectorAll(".overlay-modal");
+              overlays.forEach(function (el) {
+                el.remove();
+              });
 
-        modal.innerHTML = `
-        <div style="background: white; border-radius: 20px; padding: 25px; width: 100%; max-width: 400px; max-height: 90vh; overflow-y: auto;">
-            <h2 style="text-align: center; margin-bottom: 20px;">➕ Новая скамейка</h2>
-            
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; font-weight: 600; margin-bottom: 5px;">📸 Фотографии</label>
-                <input type="file" id="modalPhotoInput" accept="image/*" multiple style="width: 100%; padding: 10px; border: 2px solid #e0e0e0; border-radius: 10px;">
-                <div id="photoPreview" style="display: flex; gap: 10px; margin-top: 10px; flex-wrap: wrap;"></div>
-            </div>
-            
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; font-weight: 600; margin-bottom: 5px;">✏️ Название *</label>
-                <input type="text" id="modalBenchName" style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 10px;">
-            </div>
-            
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; font-weight: 600; margin-bottom: 5px;">📝 Описание</label>
-                <textarea id="modalBenchDesc" rows="3" style="width: 100%; padding: 12px; border: 2px solid #e0e0e0; border-radius: 10px;"></textarea>
-            </div>
-            
-            <div style="margin-bottom: 15px;">
-                <label style="display: block; font-weight: 600; margin-bottom: 5px;">📍 Координаты</label>
-                <div style="background: #f0f4f8; padding: 10px; border-radius: 10px; font-size: 0.9em;">
-                    ${userPosition.lat.toFixed(5)}, ${userPosition.lng.toFixed(5)}
-                </div>
-            </div>
-            
-            <button onclick="saveBenchWithPhoto()" style="width: 100%; padding: 15px; background: #27ae60; color: white; border: none; border-radius: 12px; font-size: 1em; font-weight: 700; cursor: pointer;">💾 Сохранить</button>
-            <button onclick="this.closest('div[style]').parentElement.remove()" style="width: 100%; padding: 10px; margin-top: 10px; background: none; border: none; color: #666; cursor: pointer;">Отмена</button>
-        </div>
-    `;
+              var bonusMsg = "Отзыв отправлен!";
+              if (data.reputationBonus > 0) {
+                bonusMsg += " +" + data.reputationBonus + " репутации!";
+              }
 
-        document.body.appendChild(modal);
+              // Показываем тост вместо оверлея
+              showToast(bonusMsg);
 
-        // Превью фото
+              reviewRating = 0;
+              loadBenches();
+            } else {
+              showToast(data.error || "Ошибка");
+            }
+          });
+      }
+      function searchBenches() {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(function () {
+          var query = document.getElementById("searchInput").value.trim();
+          if (!query || query.length < 2) {
+            document
+              .getElementById("searchResultsList")
+              .classList.remove("active");
+            return;
+          }
+          searchResults = [];
+          allBenches.forEach(function (bench) {
+            if (
+              bench.name.toLowerCase().includes(query.toLowerCase()) ||
+              (bench.description &&
+                bench.description.toLowerCase().includes(query.toLowerCase()))
+            ) {
+              var distText = "";
+              if (userPosition) {
+                var dist = calculateDistance(
+                  userPosition.lat,
+                  userPosition.lng,
+                  bench.latitude,
+                  bench.longitude,
+                );
+                distText =
+                  dist < 1
+                    ? Math.round(dist * 1000) + " м"
+                    : dist.toFixed(1) + " км";
+              }
+              searchResults.push({
+                type: "bench",
+                icon: "fa-chair",
+                name: bench.name,
+                distance: distText,
+                lat: bench.latitude,
+                lng: bench.longitude,
+                bench: bench,
+              });
+            }
+          });
+          showSearchResults();
+          try {
+            ymaps
+              .geocode("Тверь, " + query, { results: 2 })
+              .then(function (res) {
+                res.geoObjects.each(function (obj) {
+                  var coords = obj.geometry.getCoordinates();
+                  var address = obj.getAddressLine();
+                  var streetDist = "";
+                  if (userPosition) {
+                    var dist = calculateDistance(
+                      userPosition.lat,
+                      userPosition.lng,
+                      coords[0],
+                      coords[1],
+                    );
+                    streetDist =
+                      dist < 1
+                        ? Math.round(dist * 1000) + " м"
+                        : dist.toFixed(1) + " км";
+                  }
+                  searchResults.push({
+                    type: "street",
+                    icon: "fa-road",
+                    name: address,
+                    distance: streetDist,
+                    lat: coords[0],
+                    lng: coords[1],
+                  });
+                });
+                showSearchResults();
+              });
+          } catch (e) {}
+        }, 300);
+      }
+
+      function showSearchResults() {
+        var list = document.getElementById("searchResultsList");
+        if (!list) return;
+        list.innerHTML = "";
+        if (searchResults.length === 0) {
+          list.classList.remove("active");
+          return;
+        }
+        var unique = [];
+        var seen = {};
+        searchResults.forEach(function (r) {
+          var key = r.type + "_" + r.name;
+          if (!seen[key]) {
+            seen[key] = true;
+            unique.push(r);
+          }
+        });
+        unique.slice(0, 8).forEach(function (result) {
+          var item = document.createElement("div");
+          item.className = "search-result-item";
+          item.innerHTML =
+            '<div class="result-icon"><i class="fa-solid ' +
+            result.icon +
+            '"></i></div><div class="result-info"><div class="result-name">' +
+            result.name +
+            "</div></div>" +
+            (result.distance
+              ? '<div class="result-distance">' + result.distance + "</div>"
+              : "");
+          item.onclick = function () {
+            list.classList.remove("active");
+            document.getElementById("searchInput").value = result.name;
+            myMap.setCenter([result.lat, result.lng], 17);
+            if (result.bench) {
+              showBenchCard(result.bench);
+            }
+          };
+          list.appendChild(item);
+        });
+        list.classList.add("active");
+      }
+
+      function calculateDistance(lat1, lon1, lat2, lon2) {
+        var R = 6371;
+        var dLat = ((lat2 - lat1) * Math.PI) / 180;
+        var dLon = ((lon2 - lon1) * Math.PI) / 180;
+        var a =
+          Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+          Math.cos((lat1 * Math.PI) / 180) *
+            Math.cos((lat2 * Math.PI) / 180) *
+            Math.sin(dLon / 2) *
+            Math.sin(dLon / 2);
+        return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      }
+
+      function openPhoto(url) {
+        var viewer = document.createElement("div");
+        viewer.className = "overlay-modal";
+        viewer.innerHTML =
+          '<img src="' +
+          url +
+          '" style="max-width:95%;max-height:95%;object-fit:contain;border-radius:10px;"><button onclick="closeOverlay(this)" style="position:absolute;top:20px;right:20px;background:rgba(255,255,255,0.2);border:none;color:white;font-size:24px;width:40px;height:40px;border-radius:50%;cursor:pointer;"><i class="fa-solid fa-xmark"></i></button>';
+        document.body.appendChild(viewer);
+      }
+
+      function openAddModal() {
+        if (!currentUser) {
+          showToast("Сначала войдите");
+          return;
+        }
+        if (!userPosition) {
+          showToast("Нажмите на иконку локации");
+          return;
+        }
+        document.getElementById("addModalContent").innerHTML =
+          '<h2 style="margin-bottom:20px;"><i class="fa-solid fa-plus" style="color:var(--primary);"></i> Новая скамейка</h2><div class="form-group"><label><i class="fa-solid fa-camera"></i>Фото</label><input type="file" id="modalPhotoInput" accept="image/*" multiple style="color:var(--gray);"><div id="photoPreview" style="display:flex;gap:10px;margin-top:10px;flex-wrap:wrap;"></div></div><div class="form-group"><label><i class="fa-solid fa-pen"></i>Название</label><input type="text" id="modalBenchName"></div><div class="form-group"><label><i class="fa-solid fa-align-left"></i>Описание</label><textarea id="modalBenchDesc" rows="3"></textarea></div><button class="btn" onclick="saveBenchWithPhoto()"><i class="fa-solid fa-save"></i>Сохранить</button><button onclick="document.getElementById(\'addModal\').classList.remove(\'active\')" style="width:100%;padding:10px;margin-top:10px;background:none;border:none;color:var(--gray);cursor:pointer;">Отмена</button>';
+        document.getElementById("addModal").classList.add("active");
         document
           .getElementById("modalPhotoInput")
           .addEventListener("change", function (e) {
             var preview = document.getElementById("photoPreview");
             preview.innerHTML = "";
-
             Array.from(e.target.files).forEach(function (file) {
               var reader = new FileReader();
               reader.onload = function (e) {
                 var img = document.createElement("img");
                 img.src = e.target.result;
                 img.style.cssText =
-                  "width: 80px; height: 80px; object-fit: cover; border-radius: 8px;";
+                  "width:80px;height:80px;object-fit:cover;border-radius:8px;";
                 preview.appendChild(img);
               };
               reader.readAsDataURL(file);
@@ -541,12 +1259,10 @@
           .getElementById("modalBenchDesc")
           .value.trim();
         var photos = document.getElementById("modalPhotoInput").files;
-
         if (!name) {
           showToast("Введите название");
           return;
         }
-
         var formData = new FormData();
         formData.append("name", name);
         formData.append("description", description);
@@ -554,34 +1270,81 @@
         formData.append("longitude", userPosition.lng);
         formData.append("user_id", currentUser.id);
         formData.append("user_name", currentUser.nickname);
-
-        // Добавляем фото
         for (var i = 0; i < photos.length; i++) {
           formData.append("photos", photos[i]);
         }
-
-        fetch("/api/benches", {
-          method: "POST",
-          body: formData,
-        })
+        fetch("/api/benches", { method: "POST", body: formData })
           .then(function (r) {
             return r.json();
           })
           .then(function (data) {
             if (data.success) {
-              // Закрываем модалку
-              var modal = document.querySelector(
-                'div[style*="position: fixed"]',
+              document.getElementById("addModal").classList.remove("active");
+              showOverlay(
+                "fa-circle-check",
+                "#27ae60",
+                "Успешно!",
+                "Скамейка отправлена на модерацию!",
+                [{ text: "OK", action: "closeOverlay(this)" }],
               );
-              if (modal) modal.remove();
-
-              showToast("✅ Добавлено!");
-              loadBenches();
-            } else {
-              showToast(data.error || "Ошибка");
             }
           });
       }
+
+      function openProfile() {
+        if (!currentUser) {
+          showToast("Сначала войдите");
+          return;
+        }
+        var myBenches = allBenches.filter(function (b) {
+          return b.user_id == currentUser.id;
+        });
+        document.getElementById("profileContent").innerHTML =
+          '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;"><h2><i class="fa-solid fa-user" style="color:var(--primary);"></i> Личный кабинет</h2><button onclick="document.getElementById(\'profileModal\').classList.remove(\'active\')" style="background:none;border:none;font-size:24px;cursor:pointer;color:var(--text);"><i class="fa-solid fa-xmark"></i></button></div><div style="display:flex;align-items:center;gap:15px;margin-bottom:20px;"><div style="width:60px;height:60px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;font-size:1.5em;font-weight:700;color:white;">' +
+          currentUser.nickname.charAt(0).toUpperCase() +
+          '</div><div><div style="font-size:1.2em;font-weight:700;">' +
+          currentUser.nickname +
+          '</div><div style="color:var(--gray);">@' +
+          currentUser.login +
+          '</div></div></div><div style="display:flex;gap:15px;margin-bottom:20px;"><div style="flex:1;text-align:center;padding:15px;background:var(--bg);border:1px solid var(--border);border-radius:12px;"><div style="font-size:1.5em;font-weight:700;color:var(--primary);">' +
+          (currentUser.reputation || 0) +
+          '</div><div style="color:var(--gray);"><i class="fa-solid fa-star"></i> Репутация</div></div><div style="flex:1;text-align:center;padding:15px;background:var(--bg);border:1px solid var(--border);border-radius:12px;"><div style="font-size:1.5em;font-weight:700;color:var(--primary);">' +
+          myBenches.length +
+          '</div><div style="color:var(--gray);"><i class="fa-solid fa-chair"></i> Скамейки</div></div></div><h3 style="margin-bottom:10px;">Мои скамейки</h3>' +
+          (myBenches.length === 0
+            ? '<p style="color:var(--gray);">У вас нет скамеек</p>'
+            : myBenches
+                .map(function (b) {
+                  return (
+                    '<div style="padding:15px;background:var(--bg);border:1px solid var(--border);border-radius:12px;margin-bottom:10px;cursor:pointer;" onclick="focusBench(' +
+                    b.latitude +
+                    "," +
+                    b.longitude +
+                    ')"><b><i class="fa-solid fa-chair" style="color:var(--primary);"></i> ' +
+                    b.name +
+                    "</b></div>"
+                  );
+                })
+                .join("")) +
+          '<button onclick="document.getElementById(\'profileModal\').classList.remove(\'active\')" style="width:100%;padding:15px;margin-top:15px;background:var(--primary);color:white;border:none;border-radius:12px;font-weight:700;cursor:pointer;"><i class="fa-solid fa-map"></i> На карту</button><button onclick="logout()" style="width:100%;padding:15px;margin-top:10px;background:#e74c3c;color:white;border:none;border-radius:12px;font-weight:700;cursor:pointer;"><i class="fa-solid fa-right-from-bracket"></i> Выйти</button>';
+        document.getElementById("profileModal").classList.add("active");
+      }
+
+      function focusBench(lat, lng) {
+        myMap.setCenter([lat, lng], 18);
+        document.getElementById("profileModal").classList.remove("active");
+      }
+
+      var benchCardEl = document.getElementById("benchCard");
+      var startY = 0;
+      benchCardEl.addEventListener("touchstart", function (e) {
+        startY = e.touches[0].clientY;
+      });
+      benchCardEl.addEventListener("touchmove", function (e) {
+        if (e.touches[0].clientY - startY > 50) {
+          closeBenchCard();
+        }
+      });
 
       checkAuth();
     </script>
