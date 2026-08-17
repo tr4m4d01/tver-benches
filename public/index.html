@@ -12,7 +12,7 @@
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
     />
     <script
-      src="https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=c2c5876b-bbf1-4c7c-87bf-9920215034e0"
+      src="https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=ВАШ_КЛЮЧ"
       type="text/javascript"
     ></script>
     <style>
@@ -49,7 +49,10 @@
       }
       #authScreen {
         position: fixed;
-        inset: 0;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
         background: var(--bg);
         display: flex;
         align-items: center;
@@ -147,7 +150,10 @@
       }
       #map {
         position: absolute;
-        inset: 0;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
       }
       .search-container {
         position: absolute;
@@ -193,9 +199,6 @@
         display: flex;
         align-items: center;
         gap: 12px;
-      }
-      .search-result-item:hover {
-        background: var(--bg);
       }
       .search-result-item i {
         color: var(--primary);
@@ -289,8 +292,8 @@
         padding: 10px 0;
       }
       .bench-card-photos img {
-        width: 150px;
-        height: 150px;
+        width: 200px;
+        height: 200px;
         object-fit: cover;
         border-radius: 12px;
         cursor: pointer;
@@ -339,38 +342,70 @@
         width: 50px;
         flex: none;
         color: var(--gray);
-        font-size: 1.1em;
         cursor: pointer;
       }
-      .close-card-btn {
+      .btn-like {
         background: var(--bg);
         border: 1px solid var(--border);
+        padding: 14px;
+        border-radius: 12px;
+        font-weight: 700;
+        cursor: pointer;
         color: var(--text);
-        width: 40px;
-        height: 40px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 5px;
+      }
+      .btn-like.active {
+        color: var(--primary);
+        border-color: var(--primary);
+      }
+      .close-btn {
+        background: rgba(45, 109, 168, 0.3);
+        border: 1px solid rgba(45, 109, 168, 0.5);
+        color: var(--primary);
+        width: 36px;
+        height: 36px;
         border-radius: 50%;
         cursor: pointer;
-        font-size: 1.2em;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1em;
+        flex-shrink: 0;
       }
       .modal {
         display: none;
         position: fixed;
-        inset: 0;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
         background: rgba(0, 0, 0, 0.7);
-        z-index: 3000;
-        align-items: flex-end;
+        z-index: 99999;
+        align-items: center;
+        justify-content: center;
+        padding: 20px;
       }
       .modal.active {
-        display: flex;
+        display: flex !important;
       }
       .modal-content {
         background: var(--card);
         border: 1px solid var(--border);
-        border-radius: 20px 20px 0 0;
+        border-radius: 20px;
         padding: 25px;
         width: 100%;
-        max-height: 90vh;
+        max-width: 500px;
+        max-height: 85vh;
         overflow-y: auto;
+      }
+      .modal-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 15px;
       }
       .toast {
         position: fixed;
@@ -381,14 +416,17 @@
         color: #fff;
         padding: 12px 20px;
         border-radius: 10px;
-        z-index: 4000;
+        z-index: 100000;
         font-weight: 600;
       }
       .overlay-modal {
         position: fixed;
-        inset: 0;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
         background: rgba(0, 0, 0, 0.8);
-        z-index: 4000;
+        z-index: 100000;
         display: flex;
         align-items: center;
         justify-content: center;
@@ -408,16 +446,6 @@
         background: var(--bg);
         border-radius: 12px;
         margin-bottom: 10px;
-      }
-      .review-user {
-        font-weight: 700;
-      }
-      .review-stars {
-        color: var(--yellow);
-      }
-      .review-comment {
-        color: var(--gray);
-        font-size: 0.9em;
       }
       .profile-stat {
         flex: 1;
@@ -441,32 +469,10 @@
         margin: 5px;
         font-size: 0.85em;
       }
-      .badge i {
-        color: var(--yellow);
-        margin-right: 5px;
-      }
       .section-title {
         font-size: 1.1em;
         font-weight: 700;
         margin: 20px 0 10px;
-      }
-      .status-badge {
-        padding: 3px 8px;
-        border-radius: 10px;
-        font-size: 0.75em;
-        font-weight: 700;
-      }
-      .status-active {
-        background: #d4edda;
-        color: #155724;
-      }
-      .status-pending {
-        background: #fff3cd;
-        color: #856404;
-      }
-      .status-hidden {
-        background: #f8d7da;
-        color: #721c24;
       }
     </style>
   </head>
@@ -486,9 +492,7 @@
           <div class="form-group">
             <label>Пароль</label><input type="password" id="loginPassword" />
           </div>
-          <button class="btn" onclick="doLogin()">
-            <i class="fa-solid fa-right-to-bracket"></i>Войти
-          </button>
+          <button class="btn" onclick="doLogin()">Войти</button>
         </div>
         <div id="registerBox" style="display: none">
           <div class="form-group">
@@ -500,9 +504,7 @@
           <div class="form-group">
             <label>Пароль</label><input type="password" id="regPassword" />
           </div>
-          <button class="btn" onclick="doRegister()">
-            <i class="fa-solid fa-user-plus"></i>Зарегистрироваться
-          </button>
+          <button class="btn" onclick="doRegister()">Зарегистрироваться</button>
         </div>
       </div>
     </div>
@@ -513,7 +515,7 @@
           <i class="fa-solid fa-magnifying-glass"></i
           ><input
             type="text"
-            placeholder="Поиск скамейки или улицы..."
+            placeholder="Поиск по адресу..."
             id="searchInput"
             oninput="searchBenches()"
           />
@@ -545,20 +547,61 @@
         <div class="bench-card-content" id="benchCardContent"></div>
       </div>
     </div>
-    <div id="reviewsModal">
-      <div class="modal-content" id="reviewsContent"></div>
+    <div id="reviewsModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Отзывы</h2>
+          <button class="close-btn" onclick="closeModal('reviewsModal')">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div id="reviewsContent"></div>
+      </div>
     </div>
-    <div id="profileModal">
-      <div class="modal-content" id="profileContent"></div>
+    <div id="profileModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Профиль</h2>
+          <button class="close-btn" onclick="closeModal('profileModal')">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div id="profileContent"></div>
+      </div>
     </div>
-    <div id="addModal">
-      <div class="modal-content" id="addModalContent"></div>
+    <div id="addModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Новая скамейка</h2>
+          <button class="close-btn" onclick="closeModal('addModal')">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div id="addModalContent"></div>
+      </div>
     </div>
-    <div id="nearbyModal">
-      <div class="modal-content" id="nearbyContent"></div>
+    <div id="nearbyModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Поблизости</h2>
+          <button class="close-btn" onclick="closeModal('nearbyModal')">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div id="nearbyContent"></div>
+      </div>
     </div>
-    <div id="topModal"><div class="modal-content" id="topContent"></div></div>
-
+    <div id="topModal" class="modal">
+      <div class="modal-content">
+        <div class="modal-header">
+          <h2>Топ</h2>
+          <button class="close-btn" onclick="closeModal('topModal')">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
+        </div>
+        <div id="topContent"></div>
+      </div>
+    </div>
     <script>
       var currentUser = null,
         userPosition = null,
@@ -568,50 +611,52 @@
         selectedBench = null,
         searchResults = [],
         searchTimeout = null,
-        reviewRating = 0;
+        reviewRating = 0,
+        profileInterval = null;
       var badWords = [
         "блять",
         "сука",
         "хуй",
         "пизда",
         "ебать",
-        "еблан",
         "нахуй",
-        "залупа",
         "хер",
         "мудак",
         "пидор",
-        "гандон",
         "шлюха",
         "жопа",
         "говно",
         "дерьмо",
-        "ублюдок",
         "тварь",
         "мразь",
         "сволочь",
-        "гадина",
-        "падла",
         "чмо",
         "лох",
         "дебил",
         "идиот",
         "дурак",
         "тупой",
-        "кретин",
         "урод",
-        "скотина",
       ];
       function containsBadWords(t) {
         if (!t) return false;
         var l = t.toLowerCase();
         for (var i = 0; i < badWords.length; i++) {
-          if (l.includes(badWords[i])) return true;
+          if (l.indexOf(badWords[i]) > -1) return true;
         }
         return false;
       }
       function isValidLatin(s) {
         return /^[a-zA-Z0-9_]+$/.test(s);
+      }
+      function escapeHtml(text) {
+        if (!text) return "";
+        var div = document.createElement("div");
+        div.textContent = text;
+        return div.innerHTML;
+      }
+      function closeModal(id) {
+        document.getElementById(id).classList.remove("active");
       }
       function createBenchIcon() {
         return {
@@ -677,16 +722,33 @@
           ';margin-bottom:15px"><i class="fa-solid ' +
           icon +
           '"></i></div><h3>' +
-          title +
+          escapeHtml(title) +
           '</h3><p style="color:var(--gray);margin:10px 0 20px">' +
-          msg +
-          '</p><button class="btn" onclick="closeOverlay(this)">OK</button></div>';
+          escapeHtml(msg) +
+          '</p><button class="btn" onclick="this.closest(\'.overlay-modal\').remove()">OK</button></div>';
+        o.addEventListener("click", function(e) {
+          if (e.target === o) o.remove();
+        });
         document.body.appendChild(o);
+      }
+      function createOverlayModal(contentHtml) {
+        var o = document.createElement("div");
+        o.className = "overlay-modal";
+        o.innerHTML =
+          '<div class="overlay-box" style="position:relative">' +
+          '<button class="close-btn" style="position:absolute;top:10px;right:10px" onclick="this.closest(\'.overlay-modal\').remove()"><i class="fa-solid fa-xmark"></i></button>' +
+          contentHtml +
+          "</div>";
+        o.addEventListener("click", function(e) {
+          if (e.target === o) o.remove();
+        });
+        document.body.appendChild(o);
+        return o;
       }
       function closeOverlay(el) {
         el.closest(".overlay-modal").remove();
       }
-      async function doRegister() {
+      function doRegister() {
         var l = document.getElementById("regLogin").value.trim(),
           n = document.getElementById("regNickname").value.trim(),
           p = document.getElementById("regPassword").value;
@@ -695,69 +757,62 @@
           return;
         }
         if (!isValidLatin(l)) {
-          showOverlay(
-            "fa-xmark",
-            "#e74c3c",
-            "Ошибка",
-            "Логин только англ.буквы!",
-          );
+          showOverlay("fa-xmark", "#e74c3c", "Ошибка", "Логин только англ!");
           return;
         }
         if (containsBadWords(n)) {
-          showOverlay("fa-xmark", "#e74c3c", "Ошибка", "Запрещённые слова!");
+          showOverlay("fa-xmark", "#e74c3c", "Ошибка", "Мат!");
           return;
         }
-        var r = await fetch("/api/register", {
+        fetch("/api/register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ login: l, password: p, nickname: n }),
-        });
-        var d = await r.json();
-        if (d.success) {
-          showOverlay(
-            "fa-check",
-            "#27ae60",
-            "Успех!",
-            "Регистрация завершена!",
-          );
-          showLogin();
-          document.getElementById("loginLogin").value = l;
-        } else {
-          showOverlay("fa-xmark", "#e74c3c", "Ошибка", d.error);
-        }
+        })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (d) {
+            if (d.success) {
+              showOverlay("fa-check", "#27ae60", "Успех!", "Регистрация!");
+              showLogin();
+            } else {
+              showOverlay("fa-xmark", "#e74c3c", "Ошибка", d.error);
+            }
+          });
       }
-      async function doLogin() {
+      function doLogin() {
         var l = document.getElementById("loginLogin").value.trim(),
           p = document.getElementById("loginPassword").value;
         if (!l || !p) {
           showToast("Введите данные");
           return;
         }
-        var r = await fetch("/api/login", {
+        fetch("/api/login", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ login: l, password: p }),
-        });
-        var d = await r.json();
-        if (d.success) {
-          currentUser = d.user;
-          localStorage.setItem("tver_user", JSON.stringify(currentUser));
-          if (currentUser.theme === "light")
-            document.body.classList.add("light");
-          document.getElementById("authScreen").classList.add("hidden");
-          document.getElementById("mainApp").classList.add("active");
-          loadBenches();
-          setTimeout(findMe, 1000);
-        } else {
-          showOverlay("fa-xmark", "#e74c3c", "Ошибка", d.error);
-        }
+        })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (d) {
+            if (d.success) {
+              currentUser = d.user;
+              localStorage.setItem("tver_user", JSON.stringify(currentUser));
+              document.getElementById("authScreen").classList.add("hidden");
+              document.getElementById("mainApp").classList.add("active");
+              loadBenches();
+              setTimeout(findMe, 1000);
+            } else {
+              showOverlay("fa-xmark", "#e74c3c", "Ошибка", d.error);
+            }
+          });
       }
       function checkAuth() {
         var s = localStorage.getItem("tver_user");
         if (s) {
           currentUser = JSON.parse(s);
-          if (currentUser.theme === "light")
-            document.body.classList.add("light");
           document.getElementById("authScreen").classList.add("hidden");
           document.getElementById("mainApp").classList.add("active");
           setTimeout(findMe, 1000);
@@ -765,31 +820,41 @@
       }
       function findMe() {
         if (navigator.geolocation && myMap) {
-          navigator.geolocation.getCurrentPosition(function (pos) {
-            userPosition = {
-              lat: pos.coords.latitude,
-              lng: pos.coords.longitude,
-            };
-            if (userPlacemark) myMap.geoObjects.remove(userPlacemark);
-            userPlacemark = new ymaps.Placemark(
-              [userPosition.lat, userPosition.lng],
-              {},
-              createUserIcon(),
-            );
-            myMap.geoObjects.add(userPlacemark);
-            myMap.setCenter([userPosition.lat, userPosition.lng], 16);
-          });
+          navigator.geolocation.getCurrentPosition(
+            function (pos) {
+              userPosition = {
+                lat: pos.coords.latitude,
+                lng: pos.coords.longitude,
+              };
+              if (userPlacemark) myMap.geoObjects.remove(userPlacemark);
+              userPlacemark = new ymaps.Placemark(
+                [userPosition.lat, userPosition.lng],
+                {},
+                createUserIcon(),
+              );
+              myMap.geoObjects.add(userPlacemark);
+              myMap.setCenter([userPosition.lat, userPosition.lng], 16);
+            },
+            function () {
+              showToast("Не удалось определить геопозицию");
+            },
+          );
         }
       }
       function loadBenches() {
         if (!myMap) return;
-        fetch("/api/benches")
-          .then((r) => r.json())
-          .then((d) => {
+        fetch("/api/benches?user_id=" + (currentUser && currentUser.id ? currentUser.id : ""))
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (d) {
             if (!d.success) return;
             allBenches = d.benches;
             myMap.geoObjects.removeAll();
-            d.benches.forEach((b) => {
+            if (userPlacemark) {
+              myMap.geoObjects.add(userPlacemark);
+            }
+            d.benches.forEach(function (b) {
               var pm = new ymaps.Placemark(
                 [b.latitude, b.longitude],
                 {},
@@ -816,53 +881,39 @@
         }
         var ph = "";
         if (b.photos && b.photos.length) {
-          ph =
-            '<div class="bench-card-photos">' +
-            b.photos
-              .map(function (p) {
-                return (
-                  '<img src="' +
-                  p.photo_url +
-                  '" onclick="openPhoto(\'' +
-                  p.photo_url +
-                  "')\">"
-                );
-              })
-              .join("") +
-            "</div>";
+          ph = '<div class="bench-card-photos">';
+          b.photos.forEach(function (p) {
+            var u = p.photo_url;
+            if (u.indexOf("/") === 0) u = window.location.origin + u;
+            ph += '<img src="' + u + '" onclick="openPhoto(this.src)">';
+          });
+          ph += "</div>";
         }
         document.getElementById("benchCardContent").innerHTML =
-          '<div style="display:flex;justify-content:space-between;gap:10px"><div style="flex:1"><div class="bench-card-title"><i class="fa-solid fa-chair"></i>' +
-          b.name +
-          '</div><div class="bench-card-distance"><i class="fa-solid fa-location-arrow"></i> ' +
+          '<div style="display:flex;justify-content:space-between;gap:10px"><div style="flex:1"><div class="bench-card-title"><i class="fa-solid fa-chair"></i>Скамейка</div><div class="bench-card-distance"><i class="fa-solid fa-location-arrow"></i> ' +
           dist +
-          ' от вас</div></div><button class="close-card-btn" onclick="closeBenchCard()"><i class="fa-solid fa-xmark"></i></button></div>' +
+          '</div></div><button class="close-btn" onclick="closeBenchCard()"><i class="fa-solid fa-xmark"></i></button></div>' +
           (b.description
-            ? '<div class="bench-card-desc">' + b.description + "</div>"
+            ? '<div class="bench-card-desc">' +
+              escapeHtml(b.description) +
+              "</div>"
             : "") +
-          '<div style="margin:10px 0">' +
-          [1, 2, 3, 4, 5]
-            .map(function (i) {
-              return (
-                '<i class="fa-solid fa-star" onclick="rateBench(' +
-                b.id +
-                "," +
-                i +
-                ')" style="cursor:pointer;color:' +
-                (i <= (b.rating || 0) ? "#ffd700" : "#333") +
-                '"></i>'
-              );
-            })
-            .join("") +
-          " <small>(" +
-          (b.rating || 0).toFixed(1) +
-          ")</small></div>" +
           ph +
           '<div class="bench-card-actions"><button class="bench-card-btn btn-route" onclick="buildRoute()"><i class="fa-solid fa-route"></i>Маршрут</button><button class="bench-card-btn btn-reviews" onclick="openReviews(' +
           b.id +
-          ')"><i class="fa-solid fa-comments"></i>Отзывы</button><button class="btn-fav" id="favBtn" onclick="toggleFav(' +
+          ')"><i class="fa-solid fa-comments"></i>Отзывы</button><button class="btn-fav" onclick="toggleFav(' +
           b.id +
-          ')"><i class="fa-solid fa-heart"></i></button><button class="btn-report" onclick="reportBench(' +
+          ')"><i class="fa-solid fa-heart"></i></button><button class="btn-like' +
+          (b.liked ? ' active' : '') +
+          '" id="likeBtn-' +
+          b.id +
+          '" onclick="toggleLike(' +
+          b.id +
+          ')"><i class="fa-solid fa-thumbs-up"></i> <span id="likesCount-' +
+          b.id +
+          '">' +
+          (b.likes || 0) +
+          '</span></button><button class="btn-report" onclick="reportBench(' +
           b.id +
           ')"><i class="fa-solid fa-flag"></i></button></div>';
         document.getElementById("benchCard").classList.add("active");
@@ -870,7 +921,6 @@
       }
       function closeBenchCard() {
         document.getElementById("benchCard").classList.remove("active");
-        selectedBench = null;
       }
       function buildRoute() {
         if (!selectedBench || !userPosition) {
@@ -890,23 +940,36 @@
           "_blank",
         );
       }
-      function rateBench(id, r) {
+      function toggleLike(id) {
         if (!currentUser) {
           showToast("Войдите");
           return;
         }
-        fetch("/api/benches/" + id + "/rate", {
+        fetch("/api/benches/" + id + "/like", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ rating: r, user_id: currentUser.id }),
+          body: JSON.stringify({ user_id: currentUser.id }),
         })
-          .then((r) => r.json())
+          .then(function (r) { return r.json(); })
           .then(function (d) {
             if (d.success) {
-              showToast("Спасибо!");
-              loadBenches();
-              closeBenchCard();
+              var likesEl = document.getElementById("likesCount-" + id);
+              if (likesEl) likesEl.textContent = d.likes || 0;
+              var btn = document.getElementById("likeBtn-" + id);
+              if (btn) {
+                if (d.liked) {
+                  btn.classList.add("active");
+                } else {
+                  btn.classList.remove("active");
+                }
+              }
+              showToast(d.liked ? "Лайк!" : "Лайк убран");
+            } else {
+              showToast(d.error || "Ошибка");
             }
+          })
+          .catch(function (e) {
+            showToast("Ошибка соединения с сервером");
           });
       }
       function toggleFav(id) {
@@ -919,11 +982,11 @@
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ user_id: currentUser.id }),
         })
-          .then((r) => r.json())
+          .then(function (r) {
+            return r.json();
+          })
           .then(function (d) {
-            var btn = document.getElementById("favBtn");
-            if (btn) btn.classList.toggle("active");
-            showToast(d.favorited ? "В избранном!" : "Удалено");
+            showToast(d.favorited ? "Добавлено!" : "Удалено!");
           });
       }
       function reportBench(id) {
@@ -934,63 +997,91 @@
         var o = document.createElement("div");
         o.className = "overlay-modal";
         o.innerHTML =
-          '<div class="overlay-box"><h3>Жалоба</h3><p style="color:var(--gray);margin:10px 0">Почему жалуетесь?</p><button class="btn" style="margin-bottom:8px" onclick="sendReport(' +
+          '<div class="overlay-box" style="position:relative"><button class="close-btn" style="position:absolute;top:10px;right:10px" onclick="this.closest(\'.overlay-modal\').remove()"><i class="fa-solid fa-xmark"></i></button><h3>Жалоба</h3><div class="form-group" style="text-align:left"><label>Причина</label><select id="reportReason" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text)"><option value="not_exists">Скамейки нет</option><option value="broken">Сломана</option><option value="spam">Спам</option></select></div><div class="form-group" style="text-align:left"><label>Фото (необязательно)</label><input type="file" id="reportPhotos" accept="image/*" multiple></div><button class="btn" onclick="sendReport(' +
           id +
-          ',\'not_exists\')">Скамейки нет</button><button class="btn" style="margin-bottom:8px;background:var(--yellow)" onclick="sendReport(' +
-          id +
-          ',\'broken\')">Скамейка сломана</button><button class="btn" style="background:var(--red)" onclick="sendReport(' +
-          id +
-          ',\'spam\')">Спам</button><button onclick="closeOverlay(this)" style="width:100%;padding:10px;background:none;border:none;color:var(--gray);margin-top:10px">Отмена</button></div>';
+          ')">Отправить</button></div>';
+        o.addEventListener("click", function(e) {
+          if (e.target === o) o.remove();
+        });
         document.body.appendChild(o);
       }
-      function sendReport(id, reason) {
-        fetch("/api/benches/" + id + "/report", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ user_id: currentUser.id, reason: reason }),
-        })
-          .then((r) => r.json())
-          .then(function () {
-            document.querySelectorAll(".overlay-modal").forEach(function (e) {
-              e.remove();
-            });
-            showToast("Жалоба отправлена");
+      function sendReport(id) {
+        var reason = document.getElementById("reportReason").value;
+        var files = document.getElementById("reportPhotos").files;
+        var fd = new FormData();
+        fd.append("reason", reason);
+        fd.append("user_id", currentUser.id);
+        for (var i = 0; i < files.length; i++) {
+          fd.append("photos", files[i]);
+        }
+        fetch("/api/benches/" + id + "/report", { method: "POST", body: fd })
+          .then(function (r) { return r.json(); })
+          .then(function (d) {
+            if (d.success) {
+              document.querySelectorAll(".overlay-modal").forEach(function (e) {
+                e.remove();
+              });
+              showToast("Жалоба отправлена");
+            } else {
+              showToast(d.error || "Ошибка");
+            }
+          })
+          .catch(function (e) {
+            showToast("Ошибка соединения с сервером");
           });
       }
       function openReviews(id) {
         fetch("/api/benches/" + id + "/reviews")
-          .then((r) => r.json())
+          .then(function (r) {
+            return r.json();
+          })
           .then(function (d) {
             var revs = d.reviews || [];
-            var h =
-              '<div style="display:flex;justify-content:space-between"><h2><i class="fa-solid fa-comments"></i> Отзывы</h2><button onclick="document.getElementById(\'reviewsModal\').classList.remove(\'active\')" style="background:none;border:none;font-size:24px;color:var(--text)">✕</button></div>';
+            var h = "";
             if (!revs.length) {
-              h += '<p style="color:var(--gray);padding:20px">Нет отзывов</p>';
+              h += '<p style="color:var(--gray)">Нет отзывов</p>';
             } else {
-              revs.forEach(function (r) {
+              revs.forEach(function (rev) {
                 var s = "";
                 for (var i = 1; i <= 5; i++) {
                   s +=
                     '<i class="fa-solid fa-star" style="color:' +
-                    (i <= r.rating ? "#ffd700" : "#333") +
+                    (i <= rev.rating ? "#ffd700" : "#333") +
                     '"></i>';
                 }
+                var ph = "";
+                if (rev.photos && rev.photos.length) {
+                  ph = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">';
+                  rev.photos.forEach(function (p) {
+                    var u = p.photo_url;
+                    if (u.indexOf("/") === 0) u = window.location.origin + u;
+                    ph += '<img src="' + u + '" style="width:100px;height:100px;object-fit:cover;border-radius:8px;cursor:pointer" onclick="openPhoto(this.src)">';
+                  });
+                  ph += "</div>";
+                }
                 h +=
-                  '<div class="review-item"><div class="review-user">' +
-                  r.nickname +
-                  "</div><div>" +
-                  s +
-                  "</div>" +
-                  (r.comment
-                    ? '<div class="review-comment">' + r.comment + "</div>"
+                  '<div class="review-item"><div style="display:flex;justify-content:space-between;align-items:center"><b>' +
+                  escapeHtml(rev.nickname) +
+                  "</b>" +
+                  (currentUser && currentUser.id !== rev.user_id
+                    ? '<button class="btn-sm" style="background:#5a6b7d;color:#fff;border:none;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:.8em" onclick="reportReview(' +
+                      rev.id +
+                      ', ' +
+                      id +
+                      ')">Жалоба</button>'
                     : "") +
+                  '</div>' +
+                  s +
+                  "<br>" +
+                  escapeHtml(rev.comment || "") +
+                  ph +
                   "</div>";
               });
             }
             h +=
               '<button class="btn" onclick="openAddReview(' +
               id +
-              ')"><i class="fa-solid fa-pen"></i>Оставить отзыв</button>';
+              ')">Оставить отзыв</button>';
             document.getElementById("reviewsContent").innerHTML = h;
             document.getElementById("reviewsModal").classList.add("active");
           });
@@ -1000,20 +1091,25 @@
         document.getElementById("reviewsModal").classList.remove("active");
         var o = document.createElement("div");
         o.className = "overlay-modal";
+        var o = document.createElement("div");
+        o.className = "overlay-modal";
         o.innerHTML =
-          '<div class="overlay-box"><h3>Отзыв</h3><div id="stars" style="font-size:2em;margin:10px 0">' +
+          '<div class="overlay-box" style="position:relative"><button class="close-btn" style="position:absolute;top:10px;right:10px" onclick="this.closest(\'.overlay-modal\').remove()"><i class="fa-solid fa-xmark"></i></button><h3>Отзыв</h3><div id="stars">' +
           [1, 2, 3, 4, 5]
             .map(function (i) {
               return (
                 '<i class="fa-solid fa-star" onclick="setRating(' +
                 i +
-                ')" style="cursor:pointer;color:#333"></i>'
+                ')" style="cursor:pointer;color:#333;font-size:2em"></i>'
               );
             })
             .join("") +
-          '</div><textarea id="revComment" rows="3" style="width:100%;padding:12px;border:1px solid var(--border);border-radius:10px;background:var(--bg);color:var(--text);margin-bottom:10px"></textarea><button class="btn" onclick="submitReview(' +
+          '</div><textarea id="revComment" rows="3" style="width:100%;margin:10px 0;padding:10px;border:1px solid var(--border);border-radius:10px;background:var(--bg);color:var(--text)"></textarea><div class="form-group" style="text-align:left"><label>Фото (необязательно)</label><input type="file" id="reviewPhotos" accept="image/*" multiple></div><button class="btn" onclick="submitReview(' +
           id +
           ')">Отправить</button></div>';
+        o.addEventListener("click", function(e) {
+          if (e.target === o) o.remove();
+        });
         document.body.appendChild(o);
       }
       function setRating(r) {
@@ -1029,91 +1125,69 @@
           return;
         }
         if (containsBadWords(c)) {
-          showOverlay("fa-xmark", "#e74c3c", "Ошибка", "Запрещённые слова!");
+          showOverlay("fa-xmark", "#e74c3c", "Ошибка", "Мат!");
           return;
         }
-        fetch("/api/benches/" + id + "/review", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            rating: reviewRating,
-            comment: c,
-            user_id: currentUser.id,
-          }),
-        })
-          .then((r) => r.json())
+        var files = document.getElementById("reviewPhotos").files;
+        var fd = new FormData();
+        fd.append("rating", reviewRating);
+        fd.append("comment", c);
+        fd.append("user_id", currentUser.id);
+        for (var i = 0; i < files.length; i++) {
+          fd.append("photos", files[i]);
+        }
+        fetch("/api/benches/" + id + "/review", { method: "POST", body: fd })
+          .then(function (r) { return r.json(); })
           .then(function (d) {
             if (d.success) {
               document.querySelectorAll(".overlay-modal").forEach(function (e) {
                 e.remove();
               });
               showToast("Отзыв отправлен!");
-              loadBenches();
             } else {
               showToast(d.error);
             }
+          })
+          .catch(function (e) {
+            showToast("Ошибка соединения с сервером");
           });
       }
       function searchBenches() {
         clearTimeout(searchTimeout);
         searchTimeout = setTimeout(function () {
           var q = document.getElementById("searchInput").value.trim();
-          if (!q || q.length < 2) {
+          if (!q || q.length < 3) {
             document
               .getElementById("searchResultsList")
               .classList.remove("active");
             return;
           }
-          searchResults = [];
-          allBenches.forEach(function (b) {
-            if (b.name.toLowerCase().includes(q.toLowerCase())) {
-              var dt = "";
-              if (userPosition) {
-                var dd = calcDist(
-                  userPosition.lat,
-                  userPosition.lng,
-                  b.latitude,
-                  b.longitude,
-                );
-                dt =
-                  dd < 1 ? Math.round(dd * 1000) + " м" : dd.toFixed(1) + " км";
-              }
-              searchResults.push({
-                icon: "fa-chair",
-                name: b.name,
-                dist: dt,
-                bench: b,
-              });
-            }
-          });
-          if (searchResults.length) {
-            showSearchResults();
-          } else {
-            try {
-              ymaps.geocode("Тверь, " + q, { results: 3 }).then(function (res) {
-                res.geoObjects.each(function (obj) {
-                  var c = obj.geometry.getCoordinates();
-                  var addr = obj.getAddressLine();
-                  allBenches.forEach(function (b) {
-                    var dd = calcDist(c[0], c[1], b.latitude, b.longitude);
-                    if (dd <= 1) {
-                      searchResults.push({
-                        icon: "fa-chair",
-                        name: b.name + " (рядом: " + addr.split(",")[0] + ")",
-                        dist:
-                          dd < 1
-                            ? Math.round(dd * 1000) + " м"
-                            : dd.toFixed(1) + " км",
-                        bench: b,
-                      });
-                    }
+          ymaps.geocode("Тверь, " + q, { results: 10 }).then(function (res) {
+            searchResults = [];
+            var firstResult = res.geoObjects.get(0);
+            if (firstResult) {
+              var c = firstResult.geometry.getCoordinates();
+              allBenches.forEach(function (b) {
+                var dd = calcDist(c[0], c[1], b.latitude, b.longitude);
+                if (dd <= 5) {
+                  searchResults.push({
+                    name: b.description || "Скамейка",
+                    dist:
+                      dd < 1
+                        ? Math.round(dd * 1000) + " м"
+                        : dd.toFixed(1) + " км",
+                    bench: b,
+                    _dist: dd,
                   });
-                  showSearchResults();
-                });
+                }
               });
-            } catch (e) {}
-          }
-        }, 300);
+              searchResults.sort(function (a, b) { return a._dist - b._dist; });
+            }
+            showSearchResults();
+          }).catch(function (e) {
+            document.getElementById("searchResultsList").classList.remove("active");
+          });
+        }, 500);
       }
       function showSearchResults() {
         var l = document.getElementById("searchResultsList");
@@ -1126,16 +1200,13 @@
           var d = document.createElement("div");
           d.className = "search-result-item";
           d.innerHTML =
-            '<i class="fa-solid ' +
-            r.icon +
-            '"></i><span class="name">' +
-            r.name +
+            '<i class="fa-solid fa-chair"></i><span class="name">' +
+            escapeHtml(r.name) +
             '</span><span class="dist">' +
             r.dist +
             "</span>";
           d.onclick = function () {
             l.classList.remove("active");
-            document.getElementById("searchInput").value = r.name;
             myMap.setCenter([r.bench.latitude, r.bench.longitude], 17);
             showBenchCard(r.bench);
           };
@@ -1161,7 +1232,7 @@
         o.innerHTML =
           '<img src="' +
           u +
-          '" style="max-width:95%;max-height:95%;border-radius:10px"><button onclick="closeOverlay(this)" style="position:absolute;top:20px;right:20px;background:none;border:none;font-size:30px;color:#fff">✕</button>';
+          '" style="max-width:95%;border-radius:10px"><button class="close-btn" onclick="closeOverlay(this)"><i class="fa-solid fa-xmark"></i></button>';
         document.body.appendChild(o);
       }
       function openAddModal() {
@@ -1174,7 +1245,7 @@
           return;
         }
         document.getElementById("addModalContent").innerHTML =
-          '<h2>Новая скамейка</h2><div class="form-group"><label>Фото (обязательно!)</label><input type="file" id="modalPhotoInput" accept="image/*" multiple></div><div id="photoPreview" style="display:flex;gap:10px;flex-wrap:wrap"></div><div class="form-group"><label>Название</label><input type="text" id="modalBenchName"></div><div class="form-group"><label>Описание</label><textarea id="modalBenchDesc" rows="3"></textarea></div><button class="btn" onclick="saveBench()">Сохранить</button>';
+          '<div class="form-group"><label>Фото (обязательно!)</label><input type="file" id="modalPhotoInput" accept="image/*" multiple></div><div id="photoPreview" style="display:flex;gap:10px;flex-wrap:wrap"></div><div class="form-group"><label>Описание</label><textarea id="modalBenchDesc" rows="3"></textarea></div><button class="btn" onclick="saveBench()">Сохранить</button>';
         document.getElementById("addModal").classList.add("active");
         document
           .getElementById("modalPhotoInput")
@@ -1195,23 +1266,21 @@
           });
       }
       function saveBench() {
-        var n = document.getElementById("modalBenchName").value.trim(),
-          d = document.getElementById("modalBenchDesc").value.trim(),
+        var d = document.getElementById("modalBenchDesc").value.trim(),
           f = document.getElementById("modalPhotoInput").files;
-        if (!n) {
-          showToast("Введите название");
-          return;
-        }
         if (!f.length) {
           showOverlay("fa-xmark", "#e74c3c", "Ошибка", "Фото обязательно!");
           return;
         }
-        if (containsBadWords(n) || containsBadWords(d)) {
-          showOverlay("fa-xmark", "#e74c3c", "Ошибка", "Запрещённые слова!");
+        if (!userPosition) {
+          showToast("Сначала определите геопозицию");
+          return;
+        }
+        if (containsBadWords(d)) {
+          showOverlay("fa-xmark", "#e74c3c", "Ошибка", "Мат!");
           return;
         }
         var fd = new FormData();
-        fd.append("name", n);
         fd.append("description", d);
         fd.append("latitude", userPosition.lat);
         fd.append("longitude", userPosition.lng);
@@ -1221,12 +1290,29 @@
           fd.append("photos", f[i]);
         }
         fetch("/api/benches", { method: "POST", body: fd })
-          .then((r) => r.json())
+          .then(function (r) {
+            return r.json();
+          })
           .then(function (d) {
             if (d.success) {
-              document.getElementById("addModal").classList.remove("active");
-              showOverlay("fa-check", "#27ae60", "Готово!", d.message);
+              closeModal("addModal");
+              showToast("Отправлено на модерацию!");
+            } else {
+              showOverlay(
+                "fa-xmark",
+                "#e74c3c",
+                "Ошибка",
+                d.error || "Не удалось добавить",
+              );
             }
+          })
+          .catch(function () {
+            showOverlay(
+              "fa-xmark",
+              "#e74c3c",
+              "Ошибка",
+              "Ошибка соединения с сервером",
+            );
           });
       }
       function showNearby() {
@@ -1248,10 +1334,9 @@
           .sort(function (a, b) {
             return a._dist - b._dist;
           });
-        var h =
-          '<h2><i class="fa-solid fa-chair"></i> Скамейки поблизости</h2>';
+        var h = "";
         if (!near.length) {
-          h += '<p style="color:var(--gray)">Нет скамеек в радиусе 2 км</p>';
+          h += '<p style="color:var(--gray)">Нет в радиусе 2 км</p>';
         } else {
           near.forEach(function (b) {
             h +=
@@ -1259,8 +1344,8 @@
               b.latitude +
               "," +
               b.longitude +
-              ')"><i class="fa-solid fa-chair" style="color:var(--primary)"></i><span class="name">' +
-              b.name +
+              ')"><i class="fa-solid fa-chair"></i><span class="name">' +
+              escapeHtml(b.description || "Скамейка") +
               '</span><span class="dist">' +
               (b._dist < 1
                 ? Math.round(b._dist * 1000) + " м"
@@ -1272,38 +1357,36 @@
         document.getElementById("nearbyModal").classList.add("active");
       }
       function focusBench(lat, lng) {
-        document.getElementById("nearbyModal").classList.remove("active");
-        document.getElementById("profileModal").classList.remove("active");
+        closeModal("nearbyModal");
+        closeModal("profileModal");
         myMap.setCenter([lat, lng], 18);
+      }
+      function focusFavBench(benchId) {
+        var bench = allBenches.find(function (b) { return b.id === benchId; });
+        if (bench) {
+          closeModal("profileModal");
+          showBenchCard(bench);
+        } else {
+          showToast("Эта скамейка еще не одобрена");
+        }
       }
       function openTopUsers() {
         fetch("/api/top-users")
-          .then((r) => r.json())
+          .then(function (r) {
+            return r.json();
+          })
           .then(function (d) {
-            var h =
-              '<h2><i class="fa-solid fa-trophy"></i> Топ пользователей</h2>';
-            if (!d.users.length) {
-              h += '<p style="color:var(--gray)">Нет данных</p>';
-            } else {
-              d.users.forEach(function (u, i) {
-                var medal =
-                  i === 0
-                    ? "🥇"
-                    : i === 1
-                      ? "🥈"
-                      : i === 2
-                        ? "🥉"
-                        : i + 1 + ".";
-                h +=
-                  '<div class="search-result-item"><span style="font-size:1.2em">' +
-                  medal +
-                  '</span><span class="name">' +
-                  u.nickname +
-                  '</span><span class="dist">⭐' +
-                  u.reputation +
-                  "</span></div>";
-              });
-            }
+            var h = "";
+            d.users.forEach(function (u, i) {
+              h +=
+                '<div class="search-result-item"><span>' +
+                (i + 1) +
+                '</span><span class="name">' +
+                escapeHtml(u.nickname) +
+                '</span><span class="dist">⭐' +
+                u.reputation +
+                "</span></div>";
+            });
             document.getElementById("topContent").innerHTML = h;
             document.getElementById("topModal").classList.add("active");
           });
@@ -1314,162 +1397,228 @@
           return;
         }
         var h =
-          '<div style="display:flex;justify-content:space-between"><h2><i class="fa-solid fa-user"></i> Профиль</h2><button onclick="document.getElementById(\'profileModal\').classList.remove(\'active\')" style="background:none;border:none;font-size:24px;color:var(--text)">✕</button></div>';
-        h +=
-          '<div style="display:flex;align-items:center;gap:15px;margin:20px 0"><div style="width:60px;height:60px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;font-size:2em;font-weight:700;color:#fff">' +
-          currentUser.nickname.charAt(0).toUpperCase() +
-          '</div><div><div style="font-size:1.3em;font-weight:700">' +
-          currentUser.nickname +
+          '<div style="display:flex;align-items:center;gap:15px;margin-bottom:20px"><div style="width:60px;height:60px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;font-size:2em;color:#fff">' +
+          (currentUser.nickname
+            ? currentUser.nickname.charAt(0).toUpperCase()
+            : "?") +
+          '</div><div><div style="font-weight:700">' +
+          escapeHtml(currentUser.nickname) +
           '</div><div style="color:var(--gray)">@' +
-          currentUser.login +
+          escapeHtml(currentUser.login) +
           "</div></div></div>";
         h +=
           '<div style="display:flex;gap:10px;margin-bottom:20px"><div class="profile-stat"><div class="v">' +
           (currentUser.reputation || 0) +
-          '</div><div style="color:var(--gray)">Репутация</div></div><div class="profile-stat"><div class="v" id="myBenchesCount">...</div><div style="color:var(--gray)">Скамейки</div></div></div>';
+          '</div><div style="color:var(--gray)">Репутация</div></div></div>';
         h +=
           '<div class="section-title">Достижения</div><div id="badgesBox">Загрузка...</div>';
         h +=
-          '<div class="section-title">Мои скамейки</div><div id="myBenchesBox">Загрузка...</div>';
+          '<div class="section-title">Мои скамейки</div><div id="myBenchesBox" style="max-height:200px;overflow-y:auto">Загрузка...</div>';
         h +=
           '<div class="section-title">Избранное</div><div id="myFavBox">Загрузка...</div>';
         h +=
-          '<div class="section-title">Отзывы на мои скамейки</div><div id="myReviewsBox">Загрузка...</div>';
+          '<div class="section-title">Отзывы</div><div id="myReviewsBox">Загрузка...</div>';
         h +=
-          '<div class="section-title">Настройки</div><button class="btn" style="margin-bottom:10px" onclick="toggleTheme()"><i class="fa-solid fa-moon"></i> Переключить тему</button>';
+          '<div class="section-title">Мои жалобы</div><div id="myReportsBox" style="max-height:200px;overflow-y:auto">Загрузка...</div>';
         h +=
-          '<button class="btn" style="background:#e74c3c" onclick="logout()"><i class="fa-solid fa-right-from-bracket"></i> Выйти</button>';
+          '<button class="btn" style="margin-top:15px;background:#e74c3c" onclick="logout()">Выйти</button>';
         document.getElementById("profileContent").innerHTML = h;
         document.getElementById("profileModal").classList.add("active");
-
         fetch("/api/user/" + currentUser.id + "/badges")
           .then((r) => r.json())
           .then(function (d) {
-            var bb = document.getElementById("badgesBox");
-            bb.innerHTML = d.badges.length
-              ? d.badges
-                  .map(function (b) {
-                    return (
-                      '<span class="badge"><i class="fa-solid ' +
-                      b.icon +
-                      '"></i>' +
-                      b.name +
-                      "</span>"
-                    );
-                  })
-                  .join("")
-              : '<span style="color:var(--gray)">Нет достижений</span>';
+            document.getElementById("badgesBox").innerHTML =
+              d && d.badges && d.badges.length
+                ? d.badges
+                    .map(function (b) {
+                      return (
+                        '<span class="badge"><i class="fa-solid ' +
+                        b.icon +
+                        '"></i>' +
+                        b.name +
+                        "</span>"
+                      );
+                    })
+                    .join("")
+                : "Нет";
           });
         fetch("/api/user/" + currentUser.id + "/benches")
           .then((r) => r.json())
           .then(function (d) {
-            document.getElementById("myBenchesCount").textContent =
-              d.benches.length;
-            var mb = document.getElementById("myBenchesBox");
-            if (!d.benches.length) {
-              mb.innerHTML = '<p style="color:var(--gray)">Нет скамеек</p>';
-            } else {
-              mb.innerHTML = d.benches
-                .map(function (b) {
-                  var st =
-                    b.status === "active"
-                      ? "✅"
-                      : b.status === "pending"
-                        ? "⏳"
-                        : "❌";
-                  return (
-                    '<div class="search-result-item"><span>' +
-                    st +
-                    '</span><span class="name">' +
-                    b.name +
-                    '</span><span style="font-size:.75em;color:var(--gray)">' +
-                    (b.rejection_reason || b.status) +
-                    "</span></div>"
-                  );
-                })
-                .join("");
-            }
+            document.getElementById("myBenchesBox").innerHTML =
+              d && d.benches && d.benches.length
+                ? d.benches
+                    .map(function (b) {
+                      var st =
+                        b.status === "active"
+                          ? "✅"
+                          : b.status === "pending"
+                            ? "⏳"
+                            : "❌";
+                      return (
+                        '<div class="search-result-item"><span>' +
+                        st +
+                        '</span><span class="name">' +
+                        escapeHtml(b.description || "Скамейка") +
+                        "</span></div>"
+                      );
+                    })
+                    .join("")
+                : "Нет";
           });
         fetch("/api/user/" + currentUser.id + "/favorites")
           .then((r) => r.json())
           .then(function (d) {
-            var mf = document.getElementById("myFavBox");
-            if (!d.favorites.length) {
-              mf.innerHTML = '<p style="color:var(--gray)">Нет избранных</p>';
-            } else {
-              mf.innerHTML = d.favorites
-                .map(function (b) {
-                  return (
-                    '<div class="search-result-item" onclick="focusBench(' +
-                    b.latitude +
-                    "," +
-                    b.longitude +
-                    ')"><i class="fa-solid fa-heart" style="color:var(--red)"></i><span class="name">' +
-                    b.name +
-                    "</span></div>"
-                  );
-                })
-                .join("");
-            }
+            document.getElementById("myFavBox").innerHTML =
+              d && d.favorites && d.favorites.length
+                ? d.favorites
+                    .map(function (b) {
+                      return (
+                        '<div class="search-result-item" onclick="focusFavBench(' +
+                        b.id +
+                        ')"><span class="name">' +
+                        escapeHtml(b.description || "Скамейка") +
+                        "</span></div>"
+                      );
+                    })
+                    .join("")
+                : "Нет";
           });
         fetch("/api/user/" + currentUser.id + "/received-reviews")
           .then((r) => r.json())
           .then(function (d) {
-            var mr = document.getElementById("myReviewsBox");
-            if (!d.reviews.length) {
-              mr.innerHTML = '<p style="color:var(--gray)">Нет отзывов</p>';
-            } else {
-              mr.innerHTML = d.reviews
-                .map(function (r) {
-                  var s = "";
-                  for (var i = 1; i <= 5; i++) {
-                    s +=
-                      '<i class="fa-solid fa-star" style="color:' +
-                      (i <= r.rating ? "#ffd700" : "#333") +
-                      ';font-size:.8em"></i>';
-                  }
-                  return (
-                    '<div class="review-item"><div class="review-user">' +
-                    r.reviewer +
-                    ' о "' +
-                    r.bench_name +
-                    '"</div><div>' +
-                    s +
-                    "</div>" +
-                    (r.comment
-                      ? '<div class="review-comment">' + r.comment + "</div>"
-                      : "") +
-                    "</div>"
-                  );
+            document.getElementById("myReviewsBox").innerHTML =
+              d && d.reviews && d.reviews.length
+                ? d.reviews
+                    .map(function (r) {
+                      var ph = "";
+                      if (r.photos && r.photos.length) {
+                        ph = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">';
+                        r.photos.forEach(function (p) {
+                          var u = p.photo_url;
+                          if (u.indexOf("/") === 0) u = window.location.origin + u;
+                          ph += '<img src="' + u + '" style="width:80px;height:80px;object-fit:cover;border-radius:8px;cursor:pointer" onclick="openPhoto(this.src)">';
+                        });
+                        ph += "</div>";
+                      }
+                      return (
+                        '<div class="review-item"><b>' +
+                        escapeHtml(r.reviewer || "Аноним") +
+                        "</b>: " +
+                        escapeHtml(r.comment || "") +
+                        ph +
+                        "</div>"
+                      );
+                    })
+                    .join("")
+                : "Нет";
+          });
+        fetch("/api/user/" + currentUser.id + "/reports")
+          .then((r) => r.json())
+          .then(function (d) {
+            var mr = document.getElementById("myReportsBox");
+            if (d && d.reports && d.reports.length) {
+              mr.innerHTML = d.reports
+                .map(function (rp) {
+                  var st =
+                    rp.status === "pending"
+                      ? "⏳ Ожидает"
+                      : rp.admin_response
+                        ? "✅ Отвечено"
+                        : "✅ Обработана";
+                   var resp = rp.admin_response
+                     ? '<div style="color:var(--green);margin-top:5px"><i class="fa-solid fa-reply"></i> ' +
+                       escapeHtml(rp.admin_response) +
+                       "</div>"
+                     : "";
+                   var ph = "";
+                   if (rp.photos && rp.photos.length) {
+                     ph = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">';
+                     rp.photos.forEach(function (p) {
+                       var u = p.photo_url;
+                       if (u.indexOf("/") === 0) u = window.location.origin + u;
+                       ph += '<img src="' + u + '" style="width:80px;height:80px;object-fit:cover;border-radius:8px;cursor:pointer" onclick="openPhoto(this.src)">';
+                     });
+                     ph += "</div>";
+                   }
+                   var removeBtn =
+                     rp.status !== "pending"
+                       ? '<button class="btn-sm" style="margin-top:8px;background:#5a6b7d;color:#fff;border:none;border-radius:8px;padding:6px 10px;cursor:pointer" onclick="removeReport(' +
+                         rp.id +
+                         ', this)">Убрать из списка</button>'
+                       : "";
+                   return (
+                     '<div class="review-item"><b>' +
+                     escapeHtml(rp.bench_name) +
+                     '</b><div style="color:var(--gray);font-size:.9em">' +
+                     escapeHtml(rp.reason) +
+                     " — " +
+                     st +
+                     "</div>" +
+                     ph +
+                     resp +
+                     removeBtn +
+                     "</div>"
+                   );
                 })
                 .join("");
+            } else {
+              mr.innerHTML = '<p style="color:var(--gray)">Нет жалоб</p>';
             }
           });
       }
-      function toggleTheme() {
-        if (!currentUser) return;
-        var newTheme = document.body.classList.contains("light")
-          ? "dark"
-          : "light";
-        document.body.classList.toggle("light");
-        currentUser.theme = newTheme;
-        localStorage.setItem("tver_user", JSON.stringify(currentUser));
-        fetch("/api/user/" + currentUser.id + "/theme", {
+      function removeReport(id, btn) {
+        if (!confirm("Убрать жалобу из списка?")) return;
+        fetch("/api/user/reports/" + id, { method: "DELETE" })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (d) {
+            if (d.success) {
+              var item = btn.closest(".review-item");
+              if (item) item.remove();
+              showToast("Убрано из списка");
+            } else {
+              showToast(d.error || "Ошибка");
+            }
+          });
+      }
+      function reportReview(reviewId, benchId) {
+        if (!currentUser) {
+          showToast("Войдите");
+          return;
+        }
+        var o = document.createElement("div");
+        o.className = "overlay-modal";
+        o.innerHTML =
+          '<div class="overlay-box"><h3>Жалоба на отзыв</h3><div class="form-group" style="text-align:left"><label>Причина</label><select id="reviewReportReason" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text)"><option value="spam">Спам</option><option value="insult">Оскорбление</option><option value="fake">Неточная информация</option></select></div><button class="btn" onclick="sendReviewReport(' +
+          reviewId +
+          ', ' +
+          benchId +
+          ')">Отправить</button></div>';
+        document.body.appendChild(o);
+      }
+      function sendReviewReport(reviewId, benchId) {
+        var reason = document.getElementById("reviewReportReason").value;
+        fetch("/api/reviews/" + reviewId + "/report", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ theme: newTheme }),
+          body: JSON.stringify({ user_id: currentUser.id, reason: reason }),
+        }).then(function (r) { return r.json(); }).then(function (d) {
+          if (d.success) {
+            document.querySelectorAll(".overlay-modal").forEach(function (e) { e.remove(); });
+            showToast("Жалоба отправлена");
+          } else {
+            showToast(d.error || "Ошибка");
+          }
         });
-        showToast("Тема обновлена!");
       }
       function logout() {
         currentUser = null;
         localStorage.removeItem("tver_user");
         document.getElementById("authScreen").classList.remove("hidden");
         document.getElementById("mainApp").classList.remove("active");
-        document.getElementById("profileModal").classList.remove("active");
-        document.querySelectorAll(".overlay-modal").forEach(function (e) {
-          e.remove();
-        });
+        closeModal("profileModal");
       }
       checkAuth();
     </script>
