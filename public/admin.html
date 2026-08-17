@@ -9,7 +9,7 @@
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
     />
     <script
-      src="https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=ВАШ_КЛЮЧ"
+      src="https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=1523c569-fb40-448b-8a73-6e1a37b34216"
       type="text/javascript"
     ></script>
     <style>
@@ -217,8 +217,8 @@
         background: rgba(45, 109, 168, 0.3);
         border: 1px solid rgba(45, 109, 168, 0.5);
         color: var(--primary);
-        width: 36px;
-        height: 36px;
+        width: 44px;
+        height: 44px;
         border-radius: 50%;
         cursor: pointer;
         display: flex;
@@ -295,7 +295,29 @@
     <div id="adminPanel">
       <div class="header">
         <h1><i class="fa-solid fa-chair"></i> Админ-панель</h1>
-        <button class="btn-sm btn-reject" onclick="logout()">Выйти</button>
+        <div style="display: flex; align-items: center; gap: 10px">
+          <button
+            class="btn-sm"
+            style="background: rgba(255, 255, 255, 0.1)"
+            onclick="showTab('notifications')"
+            id="notificationsTabBtn"
+          >
+            <i class="fa-solid fa-bell"></i>
+            <span
+              id="notificationsBadge"
+              style="
+                display: none;
+                background: var(--red);
+                color: #fff;
+                border-radius: 50%;
+                padding: 2px 8px;
+                font-size: 0.8em;
+              "
+              >0</span
+            >
+          </button>
+          <button class="btn-sm btn-reject" onclick="logout()">Выйти</button>
+        </div>
       </div>
       <div class="stats" id="statsContainer"></div>
       <div id="adminMap"></div>
@@ -305,12 +327,14 @@
         <div class="tab" onclick="showTab('users')">Пользователи</div>
         <div class="tab" onclick="showTab('reports')">Жалобы</div>
         <div class="tab" onclick="showTab('reviews')">Отзывы</div>
+        <div class="tab" onclick="showTab('notifications')">Уведомления</div>
       </div>
       <div id="pendingTab"></div>
       <div id="approvedTab" style="display: none"></div>
       <div id="usersTab" style="display: none"></div>
       <div id="reportsTab" style="display: none"></div>
       <div id="reviewsTab" style="display: none"></div>
+      <div id="notificationsTab" style="display: none"></div>
     </div>
     <div id="photoViewer">
       <button class="close" onclick="closePhoto()">
@@ -318,64 +342,87 @@
       ><img id="viewerImg" src="" />
     </div>
     <script>
-      var ADMIN_LOGIN = "admin",
-        ADMIN_PASSWORD = "admin_tver_2024";
-      var adminMap = null;
-      function initAdminMap() {
-        if (adminMap) return;
-        if (window.ymaps) {
-          ymaps.ready(function () {
-            if (!adminMap) {
-              adminMap = new ymaps.Map("adminMap", {
-                center: [56.8587, 35.9176],
-                zoom: 13,
-                controls: ["zoomControl"],
-              });
-              renderAdminMapMarkers();
-            }
-          });
-        }
-      }
-      function login() {
-        var l = document.getElementById("adminLogin").value.trim(),
-          p = document.getElementById("adminPassword").value;
-        if (l === ADMIN_LOGIN && p === ADMIN_PASSWORD) {
-          localStorage.setItem("admin_auth", "true");
-          document.getElementById("loginScreen").style.display = "none";
-          document.getElementById("adminPanel").style.display = "block";
-          initAdminMap();
-          loadAll();
-        } else {
-          alert("Неверные данные");
-        }
-      }
+      var adminToken = null;
+      var adminUserId = null;
       function escapeHtml(text) {
-        if (!text) return "";
+        if (text === null || text === undefined) return "";
         var div = document.createElement("div");
-        div.textContent = text;
+        div.textContent = String(text);
         return div.innerHTML;
       }
-      function showToast(m) {
-        var existing = document.querySelector(".toast");
-        if (existing) existing.remove();
-        var t = document.createElement("div");
-        t.className = "toast";
-        t.textContent = m;
-        document.body.appendChild(t);
-        setTimeout(function () {
-          t.remove();
-        }, 3000);
+      function adminHeaders() {
+        var headers = {};
+        if (adminToken) {
+          headers["Authorization"] = "Bearer " + adminToken;
+        }
+        return headers;
+      }
+      async function login() {
+        var l = document.getElementById("adminLogin").value.trim();
+        var p = document.getElementById("adminPassword").value;
+        try {
+          var res = await fetch("/api/login", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ login: l, password: p }),
+          });
+          var data = await res.json();
+          if (!data.success) {
+            alert("Неверные данные");
+            return;
+          }
+          adminToken = data.token;
+          adminUserId = data.user.id;
+          var adminRes = await fetch("/api/admin/benches", {
+            headers: adminHeaders(),
+          });
+          var adminData = await adminRes.json();
+          if (adminData.success) {
+            localStorage.setItem("admin_token", adminToken);
+            localStorage.setItem("admin_user_id", adminUserId);
+            document.getElementById("loginScreen").style.display = "none";
+            document.getElementById("adminPanel").style.display = "block";
+            initAdminMap();
+            loadAll();
+          } else {
+            alert(
+              "Нет доступа к админке: " +
+                (adminData.error || "недостаточно прав"),
+            );
+          }
+        } catch (e) {
+          alert("Ошибка соединения");
+        }
       }
       function logout() {
-        localStorage.removeItem("admin_auth");
+        adminToken = null;
+        adminUserId = null;
+        localStorage.removeItem("admin_token");
+        localStorage.removeItem("admin_user_id");
         location.reload();
       }
-      function checkAuth() {
-        if (localStorage.getItem("admin_auth") === "true") {
-          document.getElementById("loginScreen").style.display = "none";
-          document.getElementById("adminPanel").style.display = "block";
-          initAdminMap();
-          loadAll();
+      async function checkAuth() {
+        var token = localStorage.getItem("admin_token");
+        var uid = localStorage.getItem("admin_user_id");
+        if (token && uid) {
+          adminToken = token;
+          adminUserId = uid;
+          try {
+            var adminRes = await fetch("/api/admin/benches", {
+              headers: adminHeaders(),
+            });
+            var adminData = await adminRes.json();
+            if (adminData.success) {
+              document.getElementById("loginScreen").style.display = "none";
+              document.getElementById("adminPanel").style.display = "block";
+              initAdminMap();
+              loadAll();
+            } else {
+              logout();
+            }
+          } catch (e) {
+            logout();
+          }
         }
       }
       function loadAll() {
@@ -384,19 +431,26 @@
         loadUsers();
         loadReports();
         loadReviews();
+        loadNotifications();
         renderAdminMapMarkers();
       }
       function loadStats() {
         Promise.all([
-          fetch("/api/admin/benches").then(function (r) {
-            return r.json();
-          }),
-          fetch("/api/admin/users").then(function (r) {
-            return r.json();
-          }),
-          fetch("/api/admin/reports").then(function (r) {
-            return r.json();
-          }),
+          fetch("/api/admin/benches", { headers: adminHeaders() }).then(
+            function (r) {
+              return r.json();
+            },
+          ),
+          fetch("/api/admin/users", { headers: adminHeaders() }).then(
+            function (r) {
+              return r.json();
+            },
+          ),
+          fetch("/api/admin/reports", { headers: adminHeaders() }).then(
+            function (r) {
+              return r.json();
+            },
+          ),
         ]).then(function (results) {
           var bd = results[0],
             ud = results[1],
@@ -420,7 +474,7 @@
         });
       }
       function loadBenches() {
-        fetch("/api/admin/benches")
+        fetch("/api/admin/benches", { headers: adminHeaders() })
           .then(function (r) {
             return r.json();
           })
@@ -450,9 +504,7 @@
                       var u = p.photo_url;
                       if (u.indexOf("/") === 0) u = window.location.origin + u;
                       return (
-                        '<img src="' +
-                        u +
-                        '" onclick="openPhoto(this.src)">'
+                        '<img src="' + u + '" onclick="openPhoto(this.src)">'
                       );
                     })
                     .join("") +
@@ -489,7 +541,7 @@
       function viewBench(id) {
         var existing = document.getElementById("benchDetailModal");
         if (existing) existing.remove();
-        fetch("/api/admin/benches")
+        fetch("/api/admin/benches", { headers: adminHeaders() })
           .then(function (r) {
             return r.json();
           })
@@ -516,7 +568,7 @@
             modal.id = "benchDetailModal";
             modal.style.cssText =
               "position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,.9);z-index:6000;display:flex;align-items:center;justify-content:center;padding:20px";
-            modal.onclick = function(e) {
+            modal.onclick = function (e) {
               if (e.target === modal) modal.remove();
             };
             modal.innerHTML =
@@ -524,13 +576,13 @@
               bench.id +
               '</h2><div style="display:flex;gap:8px"><button class="btn-sm btn-view" onclick="openBenchOnMap(' +
               bench.latitude +
-              ',' +
+              "," +
               bench.longitude +
               ')">🗺 Карта</button><button class="close-btn" onclick="document.getElementById(\'benchDetailModal\').remove()"><i class="fa-solid fa-xmark"></i></button></div></div><p>' +
               escapeHtml(bench.description || "") +
               '</p><p style="color:var(--gray)">👤 ' +
               escapeHtml(bench.user_name) +
-              '</p><p>❤️ ' +
+              "</p><p>❤️ " +
               (bench.likes || 0) +
               '</p><div style="display:flex;flex-wrap:wrap;gap:10px">' +
               ph +
@@ -548,7 +600,7 @@
         }
       }
       function loadUsers() {
-        fetch("/api/admin/users")
+        fetch("/api/admin/users", { headers: adminHeaders() })
           .then(function (r) {
             return r.json();
           })
@@ -560,23 +612,56 @@
             }
             document.getElementById("usersTab").innerHTML = d.users
               .map(function (u) {
+                var adminBadge = u.is_admin
+                  ? '<span style="color:var(--yellow);font-size:0.8em">Админ</span>'
+                  : '<span style="color:var(--gray);font-size:0.8em">Пользователь</span>';
                 return (
                   '<div class="user-card"><div><b>' +
                   escapeHtml(u.nickname) +
                   '</b><br><small style="color:var(--gray)">@' +
                   escapeHtml(u.login) +
-                  '</small></div><div style="text-align:center"><div style="font-weight:700;color:var(--primary)">' +
+                  "</small>" +
+                  adminBadge +
+                  '</div><div style="text-align:center"><div style="font-weight:700;color:var(--primary)">' +
                   u.reputation +
                   '</div><small style="color:var(--gray)">репутация</small></div><div style="text-align:center"><div style="font-weight:700">' +
                   u.total_benches +
-                  '</div><small style="color:var(--gray)">скамеек</small></div></div>'
+                  '</div><small style="color:var(--gray)">скамеек</small></div><div style="display:flex;gap:5px">' +
+                  (u.is_admin
+                    ? '<button class="btn-sm btn-hide" onclick="toggleAdmin(' +
+                      u.id +
+                      ',0)">Убрать админа</button>'
+                    : '<button class="btn-sm btn-approve" onclick="toggleAdmin(' +
+                      u.id +
+                      ',1)">Сделать админом</button>') +
+                  "</div></div>"
                 );
               })
               .join("");
           });
       }
+      function toggleAdmin(uid, isAdmin) {
+        if (
+          !confirm(
+            isAdmin
+              ? "Назначить администратором?"
+              : "Убрать права администратора?",
+          )
+        )
+          return;
+        fetch("/api/admin/users/" + uid + "/admin", {
+          method: "POST",
+          headers: Object.assign(
+            { "Content-Type": "application/json" },
+            adminHeaders(),
+          ),
+          body: JSON.stringify({ is_admin: isAdmin }),
+        }).then(function () {
+          loadUsers();
+        });
+      }
       function loadReports() {
-        fetch("/api/admin/reports")
+        fetch("/api/admin/reports", { headers: adminHeaders() })
           .then(function (r) {
             return r.json();
           })
@@ -594,7 +679,8 @@
                       rp.photos
                         .map(function (p) {
                           var u = p.photo_url;
-                          if (u.indexOf("/") === 0) u = window.location.origin + u;
+                          if (u.indexOf("/") === 0)
+                            u = window.location.origin + u;
                           return (
                             '<img src="' +
                             u +
@@ -611,7 +697,7 @@
                   escapeHtml(rp.reason) +
                   '</span></div><p style="color:var(--gray)">👤 ' +
                   escapeHtml(rp.nickname || "Аноним") +
-                  '</p>' +
+                  "</p>" +
                   ph +
                   '<div class="actions"><button class="btn-sm btn-view" onclick="respondReport(' +
                   rp.id +
@@ -627,8 +713,50 @@
               .join("");
           });
       }
+      function loadNotifications() {
+        fetch("/api/admin/notifications", { headers: adminHeaders() })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (d) {
+            var box = document.getElementById("notificationsTab");
+            if (!d.notifications || !d.notifications.length) {
+              box.innerHTML =
+                '<p style="color:var(--gray);text-align:center;padding:20px">Нет уведомлений</p>';
+              return;
+            }
+            var unread = d.notifications.filter(function (n) {
+              return !n.read;
+            });
+            if (unread.length) {
+              var badge = document.getElementById("notificationsBadge");
+              badge.textContent = unread.length;
+              badge.style.display = "inline-block";
+            } else {
+              document.getElementById("notificationsBadge").style.display =
+                "none";
+            }
+            box.innerHTML = d.notifications
+              .map(function (n) {
+                return (
+                  '<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:15px;margin-bottom:10px">' +
+                  '<div style="font-weight:600">' +
+                  escapeHtml(n.message) +
+                  "</div>" +
+                  '<small style="color:var(--gray)">' +
+                  n.created_at +
+                  "</small>" +
+                  (n.type === "admin"
+                    ? '<span style="color:var(--red)"> Важное</span>'
+                    : "") +
+                  "</div>"
+                );
+              })
+              .join("");
+          });
+      }
       function loadReviews() {
-        fetch("/api/admin/reviews")
+        fetch("/api/admin/reviews", { headers: adminHeaders() })
           .then(function (r) {
             return r.json();
           })
@@ -649,11 +777,15 @@
                 }
                 var ph = "";
                 if (rev.photos && rev.photos.length) {
-                  ph = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">';
+                  ph =
+                    '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">';
                   rev.photos.forEach(function (p) {
                     var u = p.photo_url;
                     if (u.indexOf("/") === 0) u = window.location.origin + u;
-                    ph += '<img src="' + u + '" style="width:100px;height:100px;object-fit:cover;border-radius:8px;cursor:pointer" onclick="openPhoto(this.src)">';
+                    ph +=
+                      '<img src="' +
+                      u +
+                      '" style="width:100px;height:100px;object-fit:cover;border-radius:8px;cursor:pointer" onclick="openPhoto(this.src)">';
                   });
                   ph += "</div>";
                 }
@@ -678,7 +810,10 @@
       }
       function deleteReview(id) {
         if (!confirm("Удалить отзыв?")) return;
-        fetch("/api/admin/reviews/" + id, { method: "DELETE" })
+        fetch("/api/admin/reviews/" + id, {
+          method: "DELETE",
+          headers: adminHeaders(),
+        })
           .then(function (r) {
             return r.json();
           })
@@ -694,14 +829,21 @@
       function renderAdminMapMarkers() {
         if (!adminMap) return;
         adminMap.geoObjects.removeAll();
-        fetch("/api/admin/benches")
-          .then(function (r) { return r.json(); })
+        fetch("/api/admin/benches", { headers: adminHeaders() })
+          .then(function (r) {
+            return r.json();
+          })
           .then(function (d) {
             if (!d.success) return;
             d.benches.forEach(function (b) {
               var pm = new ymaps.Placemark(
                 [b.latitude, b.longitude],
-                { balloonContent: escapeHtml(b.description || "Скамейка") + "<br>Статус: " + b.status },
+                {
+                  balloonContent:
+                    escapeHtml(b.description || "Скамейка") +
+                    "<br>Статус: " +
+                    b.status,
+                },
                 {
                   iconLayout: "default#image",
                   iconImageHref:
@@ -711,7 +853,7 @@
                     ),
                   iconImageSize: [40, 40],
                   iconImageOffset: [-20, -40],
-                }
+                },
               );
               pm.events.add("click", function () {
                 viewBench(b.id);
@@ -721,7 +863,14 @@
           });
       }
       function showTab(tab) {
-        var tabs = ["pending", "approved", "users", "reports", "reviews"];
+        var tabs = [
+          "pending",
+          "approved",
+          "users",
+          "reports",
+          "reviews",
+          "notifications",
+        ];
         document.querySelectorAll(".tab").forEach(function (t, i) {
           t.classList.remove("active");
         });
@@ -738,14 +887,19 @@
           tab === "reports" ? "block" : "none";
         document.getElementById("reviewsTab").style.display =
           tab === "reviews" ? "block" : "none";
-        
+        document.getElementById("notificationsTab").style.display =
+          tab === "notifications" ? "block" : "none";
+        if (tab === "notifications") loadNotifications();
         var modal = document.getElementById("benchDetailModal");
         if (modal) modal.remove();
       }
       function updateStatus(id, status) {
         fetch("/api/admin/benches/" + id + "/status", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: Object.assign(
+            { "Content-Type": "application/json" },
+            adminHeaders(),
+          ),
           body: JSON.stringify({ status: status }),
         }).then(function () {
           loadAll();
@@ -756,7 +910,10 @@
         if (!reason) return;
         fetch("/api/admin/benches/" + id + "/status", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: Object.assign(
+            { "Content-Type": "application/json" },
+            adminHeaders(),
+          ),
           body: JSON.stringify({ status: "hidden", reason: reason }),
         }).then(function () {
           loadAll();
@@ -764,25 +921,29 @@
       }
       function deleteBench(id) {
         if (!confirm("Удалить?")) return;
-        fetch("/api/admin/benches/" + id, { method: "DELETE" }).then(
-          function () {
-            loadAll();
-          },
-        );
+        fetch("/api/admin/benches/" + id, {
+          method: "DELETE",
+          headers: adminHeaders(),
+        }).then(function () {
+          loadAll();
+        });
       }
       function respondReport(reportId) {
         var response = prompt("Ответ пользователю:", "Спасибо за жалобу!");
         if (!response) return;
         fetch("/api/admin/reports/" + reportId + "/respond", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: Object.assign(
+            { "Content-Type": "application/json" },
+            adminHeaders(),
+          ),
           body: JSON.stringify({ response: response }),
         }).then(function () {
           loadAll();
         });
       }
       function resolveReport(reportId, action) {
-        fetch("/api/admin/reports")
+        fetch("/api/admin/reports", { headers: adminHeaders() })
           .then(function (r) {
             return r.json();
           })
@@ -793,23 +954,29 @@
             if (!report) return;
             var benchId = report.bench_id;
             if (action === "delete") {
-              fetch("/api/admin/benches/" + benchId, { method: "DELETE" }).then(
-                function () {
-                  fetch("/api/admin/reports/" + reportId + "/resolve", {
-                    method: "POST",
-                  }).then(function () {
-                    loadAll();
-                  });
-                },
-              );
+              fetch("/api/admin/benches/" + benchId, {
+                method: "DELETE",
+                headers: adminHeaders(),
+              }).then(function () {
+                fetch("/api/admin/reports/" + reportId + "/resolve", {
+                  method: "POST",
+                  headers: adminHeaders(),
+                }).then(function () {
+                  loadAll();
+                });
+              });
             } else if (action === "hide") {
               fetch("/api/admin/benches/" + benchId + "/status", {
                 method: "POST",
-                headers: { "Content-Type": "application/json" },
+                headers: Object.assign(
+                  { "Content-Type": "application/json" },
+                  adminHeaders(),
+                ),
                 body: JSON.stringify({ status: "hidden" }),
               }).then(function () {
                 fetch("/api/admin/reports/" + reportId + "/resolve", {
                   method: "POST",
+                  headers: adminHeaders(),
                 }).then(function () {
                   loadAll();
                 });
@@ -817,6 +984,7 @@
             } else {
               fetch("/api/admin/reports/" + reportId + "/resolve", {
                 method: "POST",
+                headers: adminHeaders(),
               }).then(function () {
                 loadAll();
               });
@@ -830,6 +998,29 @@
       function closePhoto() {
         document.getElementById("photoViewer").classList.remove("active");
       }
+      var adminMap = null;
+      function initAdminMap() {
+        if (typeof ymaps === "undefined") {
+          setTimeout(initAdminMap, 500);
+          return;
+        }
+        if (typeof ymaps !== "undefined" && typeof ymaps.Map !== "undefined") {
+          ymaps.ready(function () {
+            if (adminMap) return;
+            adminMap = new ymaps.Map("adminMap", {
+              center: [56.8587, 35.9176],
+              zoom: 13,
+              controls: [],
+            });
+          });
+        } else {
+          setTimeout(initAdminMap, 500);
+        }
+      }
+      ymaps &&
+        ymaps.ready(function () {
+          renderAdminMapMarkers();
+        });
       checkAuth();
     </script>
   </body>

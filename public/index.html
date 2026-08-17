@@ -12,7 +12,7 @@
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
     />
     <script
-      src="https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=ВАШ_КЛЮЧ"
+      src="https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=1523c569-fb40-448b-8a73-6e1a37b34216"
       type="text/javascript"
     ></script>
     <style>
@@ -179,6 +179,28 @@
         color: var(--text);
         background: transparent;
       }
+      .search-btn {
+        border: none;
+        background: var(--primary);
+        color: #fff;
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1em;
+      }
+      #addressResults {
+        background: var(--card);
+        border: 1px solid var(--border);
+        border-radius: 15px;
+        margin-top: 5px;
+        max-height: calc(100vh - 250px);
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+      }
       #searchResultsList {
         background: var(--card);
         border: 1px solid var(--border);
@@ -186,6 +208,7 @@
         z-index: 2500;
         max-height: 350px;
         overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
         display: none;
         margin-top: 5px;
       }
@@ -252,6 +275,7 @@
         z-index: 1500;
         max-height: 75vh;
         overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
         transform: translateY(100%);
         transition: 0.3s;
       }
@@ -365,8 +389,8 @@
         background: rgba(45, 109, 168, 0.3);
         border: 1px solid rgba(45, 109, 168, 0.5);
         color: var(--primary);
-        width: 36px;
-        height: 36px;
+        width: 44px;
+        height: 44px;
         border-radius: 50%;
         cursor: pointer;
         display: flex;
@@ -400,6 +424,7 @@
         max-width: 500px;
         max-height: 85vh;
         overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
       }
       .modal-header {
         display: flex;
@@ -439,7 +464,10 @@
         padding: 25px;
         text-align: center;
         max-width: 350px;
+        max-height: 80vh;
         width: 100%;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
       }
       .review-item {
         padding: 15px;
@@ -518,9 +546,16 @@
             placeholder="Поиск по адресу..."
             id="searchInput"
             oninput="searchBenches()"
-          />
+          /><button
+            class="search-btn"
+            onclick="searchByAddress()"
+            id="searchBtn"
+          >
+            <i class="fa-solid fa-magnifying-glass"></i>
+          </button>
         </div>
         <div id="searchResultsList"></div>
+        <div id="addressResults" style="display: none"></div>
       </div>
       <div class="map-buttons">
         <button class="map-btn" onclick="findMe()">
@@ -613,6 +648,39 @@
         searchTimeout = null,
         reviewRating = 0,
         profileInterval = null;
+      if (window.Telegram && window.Telegram.WebApp) {
+        var tg = window.Telegram.WebApp;
+        tg.ready();
+        tg.expand();
+        tg.BackButton.show();
+        tg.BackButton.onClick(function () {
+          var overlays = document.querySelectorAll(".overlay-modal");
+          if (overlays.length > 0) {
+            overlays[overlays.length - 1].remove();
+            return;
+          }
+          var modals = [
+            "reviewsModal",
+            "profileModal",
+            "addModal",
+            "nearbyModal",
+            "topModal",
+          ];
+          for (var i = 0; i < modals.length; i++) {
+            var el = document.getElementById(modals[i]);
+            if (el && el.classList.contains("active")) {
+              el.classList.remove("active");
+              return;
+            }
+          }
+          var benchCard = document.getElementById("benchCard");
+          if (benchCard && benchCard.classList.contains("active")) {
+            benchCard.classList.remove("active");
+            return;
+          }
+          tg.BackButton.hide();
+        });
+      }
       var badWords = [
         "блять",
         "сука",
@@ -654,6 +722,13 @@
         var div = document.createElement("div");
         div.textContent = text;
         return div.innerHTML;
+      }
+      function authHeaders() {
+        var headers = {};
+        if (currentUser && currentUser.token) {
+          headers["Authorization"] = "Bearer " + currentUser.token;
+        }
+        return headers;
       }
       function closeModal(id) {
         document.getElementById(id).classList.remove("active");
@@ -726,7 +801,7 @@
           '</h3><p style="color:var(--gray);margin:10px 0 20px">' +
           escapeHtml(msg) +
           '</p><button class="btn" onclick="this.closest(\'.overlay-modal\').remove()">OK</button></div>';
-        o.addEventListener("click", function(e) {
+        o.addEventListener("click", function (e) {
           if (e.target === o) o.remove();
         });
         document.body.appendChild(o);
@@ -739,7 +814,7 @@
           '<button class="close-btn" style="position:absolute;top:10px;right:10px" onclick="this.closest(\'.overlay-modal\').remove()"><i class="fa-solid fa-xmark"></i></button>' +
           contentHtml +
           "</div>";
-        o.addEventListener("click", function(e) {
+        o.addEventListener("click", function (e) {
           if (e.target === o) o.remove();
         });
         document.body.appendChild(o);
@@ -799,6 +874,7 @@
           .then(function (d) {
             if (d.success) {
               currentUser = d.user;
+              currentUser.token = d.token;
               localStorage.setItem("tver_user", JSON.stringify(currentUser));
               document.getElementById("authScreen").classList.add("hidden");
               document.getElementById("mainApp").classList.add("active");
@@ -843,7 +919,10 @@
       }
       function loadBenches() {
         if (!myMap) return;
-        fetch("/api/benches?user_id=" + (currentUser && currentUser.id ? currentUser.id : ""))
+        fetch(
+          "/api/benches?user_id=" +
+            (currentUser && currentUser.id ? currentUser.id : ""),
+        )
           .then(function (r) {
             return r.json();
           })
@@ -904,7 +983,7 @@
           ')"><i class="fa-solid fa-comments"></i>Отзывы</button><button class="btn-fav" onclick="toggleFav(' +
           b.id +
           ')"><i class="fa-solid fa-heart"></i></button><button class="btn-like' +
-          (b.liked ? ' active' : '') +
+          (b.liked ? " active" : "") +
           '" id="likeBtn-' +
           b.id +
           '" onclick="toggleLike(' +
@@ -947,10 +1026,15 @@
         }
         fetch("/api/benches/" + id + "/like", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: Object.assign(
+            { "Content-Type": "application/json" },
+            authHeaders(),
+          ),
           body: JSON.stringify({ user_id: currentUser.id }),
         })
-          .then(function (r) { return r.json(); })
+          .then(function (r) {
+            return r.json();
+          })
           .then(function (d) {
             if (d.success) {
               var likesEl = document.getElementById("likesCount-" + id);
@@ -979,7 +1063,10 @@
         }
         fetch("/api/benches/" + id + "/favorite", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: Object.assign(
+            { "Content-Type": "application/json" },
+            authHeaders(),
+          ),
           body: JSON.stringify({ user_id: currentUser.id }),
         })
           .then(function (r) {
@@ -1000,7 +1087,7 @@
           '<div class="overlay-box" style="position:relative"><button class="close-btn" style="position:absolute;top:10px;right:10px" onclick="this.closest(\'.overlay-modal\').remove()"><i class="fa-solid fa-xmark"></i></button><h3>Жалоба</h3><div class="form-group" style="text-align:left"><label>Причина</label><select id="reportReason" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text)"><option value="not_exists">Скамейки нет</option><option value="broken">Сломана</option><option value="spam">Спам</option></select></div><div class="form-group" style="text-align:left"><label>Фото (необязательно)</label><input type="file" id="reportPhotos" accept="image/*" multiple></div><button class="btn" onclick="sendReport(' +
           id +
           ')">Отправить</button></div>';
-        o.addEventListener("click", function(e) {
+        o.addEventListener("click", function (e) {
           if (e.target === o) o.remove();
         });
         document.body.appendChild(o);
@@ -1010,12 +1097,17 @@
         var files = document.getElementById("reportPhotos").files;
         var fd = new FormData();
         fd.append("reason", reason);
-        fd.append("user_id", currentUser.id);
         for (var i = 0; i < files.length; i++) {
           fd.append("photos", files[i]);
         }
-        fetch("/api/benches/" + id + "/report", { method: "POST", body: fd })
-          .then(function (r) { return r.json(); })
+        fetch("/api/benches/" + id + "/report", {
+          method: "POST",
+          headers: authHeaders(),
+          body: fd,
+        })
+          .then(function (r) {
+            return r.json();
+          })
           .then(function (d) {
             if (d.success) {
               document.querySelectorAll(".overlay-modal").forEach(function (e) {
@@ -1051,11 +1143,15 @@
                 }
                 var ph = "";
                 if (rev.photos && rev.photos.length) {
-                  ph = '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">';
+                  ph =
+                    '<div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:10px">';
                   rev.photos.forEach(function (p) {
                     var u = p.photo_url;
                     if (u.indexOf("/") === 0) u = window.location.origin + u;
-                    ph += '<img src="' + u + '" style="width:100px;height:100px;object-fit:cover;border-radius:8px;cursor:pointer" onclick="openPhoto(this.src)">';
+                    ph +=
+                      '<img src="' +
+                      u +
+                      '" style="width:100px;height:100px;object-fit:cover;border-radius:8px;cursor:pointer" onclick="openPhoto(this.src)">';
                   });
                   ph += "</div>";
                 }
@@ -1066,11 +1162,11 @@
                   (currentUser && currentUser.id !== rev.user_id
                     ? '<button class="btn-sm" style="background:#5a6b7d;color:#fff;border:none;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:.8em" onclick="reportReview(' +
                       rev.id +
-                      ', ' +
+                      ", " +
                       id +
                       ')">Жалоба</button>'
                     : "") +
-                  '</div>' +
+                  "</div>" +
                   s +
                   "<br>" +
                   escapeHtml(rev.comment || "") +
@@ -1107,7 +1203,7 @@
           '</div><textarea id="revComment" rows="3" style="width:100%;margin:10px 0;padding:10px;border:1px solid var(--border);border-radius:10px;background:var(--bg);color:var(--text)"></textarea><div class="form-group" style="text-align:left"><label>Фото (необязательно)</label><input type="file" id="reviewPhotos" accept="image/*" multiple></div><button class="btn" onclick="submitReview(' +
           id +
           ')">Отправить</button></div>';
-        o.addEventListener("click", function(e) {
+        o.addEventListener("click", function (e) {
           if (e.target === o) o.remove();
         });
         document.body.appendChild(o);
@@ -1132,12 +1228,17 @@
         var fd = new FormData();
         fd.append("rating", reviewRating);
         fd.append("comment", c);
-        fd.append("user_id", currentUser.id);
         for (var i = 0; i < files.length; i++) {
           fd.append("photos", files[i]);
         }
-        fetch("/api/benches/" + id + "/review", { method: "POST", body: fd })
-          .then(function (r) { return r.json(); })
+        fetch("/api/benches/" + id + "/review", {
+          method: "POST",
+          headers: authHeaders(),
+          body: fd,
+        })
+          .then(function (r) {
+            return r.json();
+          })
           .then(function (d) {
             if (d.success) {
               document.querySelectorAll(".overlay-modal").forEach(function (e) {
@@ -1148,9 +1249,94 @@
               showToast(d.error);
             }
           })
-          .catch(function (e) {
-            showToast("Ошибка соединения с сервером");
+          .catch(function () {
+            document.querySelectorAll(".overlay-modal").forEach(function (e) {
+              e.remove();
+            });
+            setTimeout(function () {
+              openReviews(id);
+            }, 300);
           });
+      }
+      function searchByAddress() {
+        clearTimeout(searchTimeout);
+        var q = document.getElementById("searchInput").value.trim();
+        if (!q || q.length < 2) {
+          showToast("Введите адрес");
+          return;
+        }
+        document.getElementById("searchResultsList").classList.remove("active");
+        var addrList = document.getElementById("addressResults");
+        addrList.innerHTML =
+          '<p style="padding:15px;color:var(--gray)">Поиск ближайших скамеек...</p>';
+        addrList.style.display = "block";
+        ymaps
+          .geocode(q, { results: 1 })
+          .then(function (res) {
+            var firstResult = res.geoObjects.get(0);
+            if (!firstResult) {
+              addrList.innerHTML =
+                '<p style="padding:15px;color:var(--gray)">Адрес не найден</p>';
+              return;
+            }
+            var c = firstResult.geometry.getCoordinates();
+            var results = [];
+            allBenches.forEach(function (b) {
+              var dd = calcDist(c[0], c[1], b.latitude, b.longitude);
+              if (dd <= 5) {
+                results.push({
+                  name: b.description || "Скамейка",
+                  dist:
+                    dd < 1
+                      ? Math.round(dd * 1000) + " м"
+                      : dd.toFixed(1) + " км",
+                  bench: b,
+                  _dist: dd,
+                });
+              }
+            });
+            results.sort(function (a, b) {
+              return a._dist - b._dist;
+            });
+            if (!results.length) {
+              addrList.innerHTML =
+                '<p style="padding:15px;color:var(--gray)">Нет скамеек в радиусе 5 км</p>';
+              return;
+            }
+            addrList.innerHTML = results
+              .slice(0, 10)
+              .map(function (r) {
+                return (
+                  '<div class="search-result-item" onclick="goToBench(' +
+                  r.bench.id +
+                  ')">' +
+                  '<i class="fa-solid fa-chair"></i>' +
+                  '<span class="name">' +
+                  escapeHtml(r.name) +
+                  "</span>" +
+                  '<span class="dist">' +
+                  r.dist +
+                  "</span>" +
+                  "</div>"
+                );
+              })
+              .join("");
+            if (myMap) myMap.setCenter([c[0], c[1]], 14);
+          })
+          .catch(function () {
+            addrList.innerHTML =
+              '<p style="padding:15px;color:var(--gray)">Ошибка поиска</p>';
+          });
+      }
+      function goToBench(id) {
+        var bench = allBenches.find(function (b) {
+          return b.id === id;
+        });
+        if (bench) {
+          document.getElementById("addressResults").style.display = "none";
+          if (myMap) myMap.setCenter([bench.latitude, bench.longitude], 17);
+          showBenchCard(bench);
+        }
       }
       function searchBenches() {
         clearTimeout(searchTimeout);
@@ -1162,31 +1348,38 @@
               .classList.remove("active");
             return;
           }
-          ymaps.geocode("Тверь, " + q, { results: 10 }).then(function (res) {
-            searchResults = [];
-            var firstResult = res.geoObjects.get(0);
-            if (firstResult) {
-              var c = firstResult.geometry.getCoordinates();
-              allBenches.forEach(function (b) {
-                var dd = calcDist(c[0], c[1], b.latitude, b.longitude);
-                if (dd <= 5) {
-                  searchResults.push({
-                    name: b.description || "Скамейка",
-                    dist:
-                      dd < 1
-                        ? Math.round(dd * 1000) + " м"
-                        : dd.toFixed(1) + " км",
-                    bench: b,
-                    _dist: dd,
-                  });
-                }
-              });
-              searchResults.sort(function (a, b) { return a._dist - b._dist; });
-            }
-            showSearchResults();
-          }).catch(function (e) {
-            document.getElementById("searchResultsList").classList.remove("active");
-          });
+          ymaps
+            .geocode("Тверь, " + q, { results: 10 })
+            .then(function (res) {
+              searchResults = [];
+              var firstResult = res.geoObjects.get(0);
+              if (firstResult) {
+                var c = firstResult.geometry.getCoordinates();
+                allBenches.forEach(function (b) {
+                  var dd = calcDist(c[0], c[1], b.latitude, b.longitude);
+                  if (dd <= 5) {
+                    searchResults.push({
+                      name: b.description || "Скамейка",
+                      dist:
+                        dd < 1
+                          ? Math.round(dd * 1000) + " м"
+                          : dd.toFixed(1) + " км",
+                      bench: b,
+                      _dist: dd,
+                    });
+                  }
+                });
+                searchResults.sort(function (a, b) {
+                  return a._dist - b._dist;
+                });
+              }
+              showSearchResults();
+            })
+            .catch(function (e) {
+              document
+                .getElementById("searchResultsList")
+                .classList.remove("active");
+            });
         }, 500);
       }
       function showSearchResults() {
@@ -1284,12 +1477,15 @@
         fd.append("description", d);
         fd.append("latitude", userPosition.lat);
         fd.append("longitude", userPosition.lng);
-        fd.append("user_id", currentUser.id);
         fd.append("user_name", currentUser.nickname);
         for (var i = 0; i < f.length; i++) {
           fd.append("photos", f[i]);
         }
-        fetch("/api/benches", { method: "POST", body: fd })
+        fetch("/api/benches", {
+          method: "POST",
+          headers: authHeaders(),
+          body: fd,
+        })
           .then(function (r) {
             return r.json();
           })
@@ -1362,7 +1558,9 @@
         myMap.setCenter([lat, lng], 18);
       }
       function focusFavBench(benchId) {
-        var bench = allBenches.find(function (b) { return b.id === benchId; });
+        var bench = allBenches.find(function (b) {
+          return b.id === benchId;
+        });
         if (bench) {
           closeModal("profileModal");
           showBenchCard(bench);
@@ -1413,18 +1611,20 @@
         h +=
           '<div class="section-title">Достижения</div><div id="badgesBox">Загрузка...</div>';
         h +=
-          '<div class="section-title">Мои скамейки</div><div id="myBenchesBox" style="max-height:200px;overflow-y:auto">Загрузка...</div>';
+          '<div class="section-title">Мои скамейки</div><div id="myBenchesBox" style="max-height:200px;overflow-y:auto;-webkit-overflow-scrolling:touch">Загрузка...</div>';
         h +=
           '<div class="section-title">Избранное</div><div id="myFavBox">Загрузка...</div>';
         h +=
           '<div class="section-title">Отзывы</div><div id="myReviewsBox">Загрузка...</div>';
         h +=
-          '<div class="section-title">Мои жалобы</div><div id="myReportsBox" style="max-height:200px;overflow-y:auto">Загрузка...</div>';
+          '<div class="section-title">Мои жалобы</div><div id="myReportsBox" style="max-height:200px;overflow-y:auto;-webkit-overflow-scrolling:touch">Загрузка...</div>';
         h +=
           '<button class="btn" style="margin-top:15px;background:#e74c3c" onclick="logout()">Выйти</button>';
         document.getElementById("profileContent").innerHTML = h;
         document.getElementById("profileModal").classList.add("active");
-        fetch("/api/user/" + currentUser.id + "/badges")
+        fetch("/api/user/" + currentUser.id + "/badges", {
+          headers: authHeaders(),
+        })
           .then((r) => r.json())
           .then(function (d) {
             document.getElementById("badgesBox").innerHTML =
@@ -1442,7 +1642,9 @@
                     .join("")
                 : "Нет";
           });
-        fetch("/api/user/" + currentUser.id + "/benches")
+        fetch("/api/user/" + currentUser.id + "/benches", {
+          headers: authHeaders(),
+        })
           .then((r) => r.json())
           .then(function (d) {
             document.getElementById("myBenchesBox").innerHTML =
@@ -1466,7 +1668,9 @@
                     .join("")
                 : "Нет";
           });
-        fetch("/api/user/" + currentUser.id + "/favorites")
+        fetch("/api/user/" + currentUser.id + "/favorites", {
+          headers: authHeaders(),
+        })
           .then((r) => r.json())
           .then(function (d) {
             document.getElementById("myFavBox").innerHTML =
@@ -1484,7 +1688,9 @@
                     .join("")
                 : "Нет";
           });
-        fetch("/api/user/" + currentUser.id + "/received-reviews")
+        fetch("/api/user/" + currentUser.id + "/received-reviews", {
+          headers: authHeaders(),
+        })
           .then((r) => r.json())
           .then(function (d) {
             document.getElementById("myReviewsBox").innerHTML =
@@ -1493,11 +1699,16 @@
                     .map(function (r) {
                       var ph = "";
                       if (r.photos && r.photos.length) {
-                        ph = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">';
+                        ph =
+                          '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">';
                         r.photos.forEach(function (p) {
                           var u = p.photo_url;
-                          if (u.indexOf("/") === 0) u = window.location.origin + u;
-                          ph += '<img src="' + u + '" style="width:80px;height:80px;object-fit:cover;border-radius:8px;cursor:pointer" onclick="openPhoto(this.src)">';
+                          if (u.indexOf("/") === 0)
+                            u = window.location.origin + u;
+                          ph +=
+                            '<img src="' +
+                            u +
+                            '" style="width:80px;height:80px;object-fit:cover;border-radius:8px;cursor:pointer" onclick="openPhoto(this.src)">';
                         });
                         ph += "</div>";
                       }
@@ -1513,7 +1724,9 @@
                     .join("")
                 : "Нет";
           });
-        fetch("/api/user/" + currentUser.id + "/reports")
+        fetch("/api/user/" + currentUser.id + "/reports", {
+          headers: authHeaders(),
+        })
           .then((r) => r.json())
           .then(function (d) {
             var mr = document.getElementById("myReportsBox");
@@ -1526,40 +1739,44 @@
                       : rp.admin_response
                         ? "✅ Отвечено"
                         : "✅ Обработана";
-                   var resp = rp.admin_response
-                     ? '<div style="color:var(--green);margin-top:5px"><i class="fa-solid fa-reply"></i> ' +
-                       escapeHtml(rp.admin_response) +
-                       "</div>"
-                     : "";
-                   var ph = "";
-                   if (rp.photos && rp.photos.length) {
-                     ph = '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">';
-                     rp.photos.forEach(function (p) {
-                       var u = p.photo_url;
-                       if (u.indexOf("/") === 0) u = window.location.origin + u;
-                       ph += '<img src="' + u + '" style="width:80px;height:80px;object-fit:cover;border-radius:8px;cursor:pointer" onclick="openPhoto(this.src)">';
-                     });
-                     ph += "</div>";
-                   }
-                   var removeBtn =
-                     rp.status !== "pending"
-                       ? '<button class="btn-sm" style="margin-top:8px;background:#5a6b7d;color:#fff;border:none;border-radius:8px;padding:6px 10px;cursor:pointer" onclick="removeReport(' +
-                         rp.id +
-                         ', this)">Убрать из списка</button>'
-                       : "";
-                   return (
-                     '<div class="review-item"><b>' +
-                     escapeHtml(rp.bench_name) +
-                     '</b><div style="color:var(--gray);font-size:.9em">' +
-                     escapeHtml(rp.reason) +
-                     " — " +
-                     st +
-                     "</div>" +
-                     ph +
-                     resp +
-                     removeBtn +
-                     "</div>"
-                   );
+                  var resp = rp.admin_response
+                    ? '<div style="color:var(--green);margin-top:5px"><i class="fa-solid fa-reply"></i> ' +
+                      escapeHtml(rp.admin_response) +
+                      "</div>"
+                    : "";
+                  var ph = "";
+                  if (rp.photos && rp.photos.length) {
+                    ph =
+                      '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">';
+                    rp.photos.forEach(function (p) {
+                      var u = p.photo_url;
+                      if (u.indexOf("/") === 0) u = window.location.origin + u;
+                      ph +=
+                        '<img src="' +
+                        u +
+                        '" style="width:80px;height:80px;object-fit:cover;border-radius:8px;cursor:pointer" onclick="openPhoto(this.src)">';
+                    });
+                    ph += "</div>";
+                  }
+                  var removeBtn =
+                    rp.status !== "pending"
+                      ? '<button class="btn-sm" style="margin-top:8px;background:#5a6b7d;color:#fff;border:none;border-radius:8px;padding:6px 10px;cursor:pointer" onclick="removeReport(' +
+                        rp.id +
+                        ', this)">Убрать из списка</button>'
+                      : "";
+                  return (
+                    '<div class="review-item"><b>' +
+                    escapeHtml(rp.bench_name) +
+                    '</b><div style="color:var(--gray);font-size:.9em">' +
+                    escapeHtml(rp.reason) +
+                    " — " +
+                    st +
+                    "</div>" +
+                    ph +
+                    resp +
+                    removeBtn +
+                    "</div>"
+                  );
                 })
                 .join("");
             } else {
@@ -1569,7 +1786,10 @@
       }
       function removeReport(id, btn) {
         if (!confirm("Убрать жалобу из списка?")) return;
-        fetch("/api/user/reports/" + id, { method: "DELETE" })
+        fetch("/api/user/reports/" + id, {
+          method: "DELETE",
+          headers: authHeaders(),
+        })
           .then(function (r) {
             return r.json();
           })
@@ -1593,7 +1813,7 @@
         o.innerHTML =
           '<div class="overlay-box"><h3>Жалоба на отзыв</h3><div class="form-group" style="text-align:left"><label>Причина</label><select id="reviewReportReason" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text)"><option value="spam">Спам</option><option value="insult">Оскорбление</option><option value="fake">Неточная информация</option></select></div><button class="btn" onclick="sendReviewReport(' +
           reviewId +
-          ', ' +
+          ", " +
           benchId +
           ')">Отправить</button></div>';
         document.body.appendChild(o);
@@ -1602,16 +1822,25 @@
         var reason = document.getElementById("reviewReportReason").value;
         fetch("/api/reviews/" + reviewId + "/report", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: Object.assign(
+            { "Content-Type": "application/json" },
+            authHeaders(),
+          ),
           body: JSON.stringify({ user_id: currentUser.id, reason: reason }),
-        }).then(function (r) { return r.json(); }).then(function (d) {
-          if (d.success) {
-            document.querySelectorAll(".overlay-modal").forEach(function (e) { e.remove(); });
-            showToast("Жалоба отправлена");
-          } else {
-            showToast(d.error || "Ошибка");
-          }
-        });
+        })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (d) {
+            if (d.success) {
+              document.querySelectorAll(".overlay-modal").forEach(function (e) {
+                e.remove();
+              });
+              showToast("Жалоба отправлена");
+            } else {
+              showToast(d.error || "Ошибка");
+            }
+          });
       }
       function logout() {
         currentUser = null;
