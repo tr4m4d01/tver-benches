@@ -11,28 +11,33 @@
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
     />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
     <script
       src="https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=1523c569-fb40-448b-8a73-6e1a37b34216"
       type="text/javascript"
     ></script>
     <style>
       :root {
-        --primary: #2d6da8;
-        --bg: #0a0e17;
-        --card: #0f1b2d;
-        --text: #fff;
-        --gray: #5a6b7d;
-        --border: #1e3a5f;
+        --primary: #5b75f8;
+        --primary-dark: #4a5fe0;
+        --page-bg: #5b75f8;
+        --card: #ffffff;
+        --text: #1f2937;
+        --gray: #9ca3af;
+        --border: #e5e7eb;
+        --input-bg: #f0f2fa;
+        --soft: #f9fafb;
         --green: #27ae60;
         --red: #e74c3c;
         --yellow: #ffd700;
-      }
-      body.light {
-        --bg: #f5f5f5;
-        --card: #fff;
-        --text: #1a1a1a;
-        --gray: #8a8a8a;
-        --border: #e0e0e0;
+        --shadow-card: 0 10px 30px rgba(17, 24, 39, 0.08);
+        --shadow-soft: 0 4px 15px rgba(17, 24, 39, 0.1);
+        --shadow-btn: 0 4px 12px rgba(91, 117, 248, 0.35);
       }
       * {
         margin: 0;
@@ -40,12 +45,14 @@
         box-sizing: border-box;
       }
       body {
-        font-family: -apple-system, sans-serif;
+        font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
+          Roboto, Helvetica, Arial, sans-serif;
         height: 100vh;
         height: 100dvh;
         overflow: hidden;
-        background: var(--bg);
+        background: var(--page-bg);
         color: var(--text);
+        -webkit-font-smoothing: antialiased;
       }
       #authScreen {
         position: fixed;
@@ -53,56 +60,67 @@
         left: 0;
         right: 0;
         bottom: 0;
-        background: var(--bg);
+        background: var(--page-bg);
         display: flex;
         align-items: center;
         justify-content: center;
         z-index: 5000;
         padding: 20px;
+        overflow-y: auto;
       }
       #authScreen.hidden {
         display: none;
       }
       .auth-card {
         background: var(--card);
-        border: 1px solid var(--border);
         border-radius: 20px;
-        padding: 30px;
+        box-shadow: var(--shadow-card);
+        padding: 32px 28px;
         width: 100%;
         max-width: 400px;
       }
       .auth-logo {
         text-align: center;
-        font-size: 2.5em;
+        font-size: 3.5em;
         color: var(--primary);
-        margin-bottom: 10px;
+        margin-bottom: 16px;
       }
       .auth-title {
         text-align: center;
-        font-size: 1.5em;
+        font-size: 20px;
         font-weight: 700;
-        margin-bottom: 20px;
+        color: var(--text);
+        margin-bottom: 8px;
+      }
+      .auth-subtitle {
+        text-align: center;
+        font-size: 14px;
+        color: var(--gray);
+        margin-bottom: 24px;
       }
       .auth-tabs {
         display: flex;
         gap: 10px;
         margin-bottom: 20px;
+        background: var(--input-bg);
+        padding: 5px;
+        border-radius: 10px;
       }
       .auth-tab {
         flex: 1;
         padding: 12px;
         text-align: center;
-        background: var(--bg);
-        border: 1px solid var(--border);
         border-radius: 10px;
         cursor: pointer;
         font-weight: 600;
+        font-size: 14px;
         color: var(--gray);
+        transition: 0.2s;
       }
       .auth-tab.active {
-        background: var(--primary);
-        color: #fff;
-        border-color: var(--primary);
+        background: var(--card);
+        color: var(--primary);
+        box-shadow: 0 2px 8px rgba(17, 24, 39, 0.08);
       }
       .form-group {
         margin-bottom: 15px;
@@ -110,33 +128,47 @@
       .form-group label {
         display: block;
         font-weight: 600;
-        margin-bottom: 5px;
-        font-size: 0.9em;
+        margin-bottom: 6px;
+        font-size: 13px;
+        color: var(--gray);
       }
       .form-group input,
-      .form-group textarea {
+      .form-group textarea,
+      .form-group select {
         width: 100%;
         padding: 14px;
-        border: 1px solid var(--border);
-        border-radius: 12px;
-        font-size: 1em;
+        border: 1px solid transparent;
+        border-radius: 10px;
+        font-size: 14px;
         outline: none;
-        background: var(--bg);
+        background: var(--input-bg);
         color: var(--text);
+        font-family: inherit;
+      }
+      .form-group input:focus,
+      .form-group textarea:focus,
+      .form-group select:focus {
+        border-color: var(--primary);
+        background: #fff;
       }
       .btn {
         width: 100%;
         padding: 15px;
         border: none;
-        border-radius: 12px;
-        font-size: 1em;
+        border-radius: 10px;
+        font-size: 15px;
         font-weight: 700;
         cursor: pointer;
         background: var(--primary);
         color: #fff;
+        font-family: inherit;
+        transition: 0.2s;
+      }
+      .btn:active {
+        background: var(--primary-dark);
       }
       .btn i {
-        margin-right: 5px;
+        margin-right: 6px;
       }
       #mainApp {
         display: none;
@@ -164,64 +196,76 @@
       }
       .search-bar {
         background: var(--card);
-        border: 1px solid var(--border);
-        border-radius: 15px;
-        padding: 12px 15px;
+        border-radius: 20px;
+        box-shadow: var(--shadow-soft);
+        padding: 12px 16px;
         display: flex;
         align-items: center;
         gap: 10px;
+      }
+      .search-bar > i {
+        color: var(--gray);
+        font-size: 1em;
       }
       .search-bar input {
         flex: 1;
         border: none;
         outline: none;
-        font-size: 1em;
+        font-size: 14px;
         color: var(--text);
         background: transparent;
+        font-family: inherit;
+      }
+      .search-bar input::placeholder {
+        color: var(--gray);
       }
       .search-btn {
         border: none;
         background: var(--primary);
         color: #fff;
-        width: 44px;
-        height: 44px;
-        border-radius: 50%;
+        width: 42px;
+        height: 42px;
+        border-radius: 12px;
         cursor: pointer;
         display: flex;
         align-items: center;
         justify-content: center;
         font-size: 1em;
+        flex-shrink: 0;
       }
       #addressResults {
         background: var(--card);
-        border: 1px solid var(--border);
-        border-radius: 15px;
-        margin-top: 5px;
-        max-height: calc(100vh - 250px);
+        border-radius: 16px;
+        box-shadow: var(--shadow-soft);
+        margin-top: 8px;
+        max-height: calc(100vh - 350px);
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
       }
       #searchResultsList {
         background: var(--card);
-        border: 1px solid var(--border);
-        border-radius: 12px;
+        border-radius: 16px;
+        box-shadow: var(--shadow-soft);
         z-index: 2500;
-        max-height: 350px;
+        max-height: 250px;
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
         display: none;
-        margin-top: 5px;
+        margin-top: 8px;
       }
       #searchResultsList.active {
         display: block;
       }
       .search-result-item {
-        padding: 14px;
+        padding: 14px 16px;
         cursor: pointer;
         border-bottom: 1px solid var(--border);
         display: flex;
         align-items: center;
         gap: 12px;
+      }
+      .search-result-item:last-child {
+        border-bottom: none;
       }
       .search-result-item i {
         color: var(--primary);
@@ -230,39 +274,45 @@
       .search-result-item .name {
         flex: 1;
         font-weight: 600;
-        font-size: 0.95em;
+        font-size: 14px;
+        color: var(--text);
       }
       .search-result-item .dist {
         color: var(--green);
         font-weight: 700;
-        font-size: 0.85em;
+        font-size: 13px;
       }
       .map-buttons {
         position: absolute;
         right: 15px;
-        top: 80px;
-        z-index: 1000;
+        bottom: 90px;
+        z-index: 1001;
         display: flex;
         flex-direction: column;
-        gap: 10px;
+        gap: 12px;
       }
       .map-btn {
-        width: 50px;
-        height: 50px;
-        border-radius: 50%;
+        width: 52px;
+        height: 52px;
+        border-radius: 16px;
         background: var(--card);
-        border: 1px solid var(--border);
+        box-shadow: var(--shadow-soft);
         cursor: pointer;
         font-size: 1.1em;
         color: var(--text);
         display: flex;
         align-items: center;
         justify-content: center;
+        border: none;
+        transition: 0.2s;
+      }
+      .map-btn:active {
+        transform: scale(0.94);
       }
       .map-btn.primary {
         background: var(--primary);
         color: #fff;
-        border-color: var(--primary);
+        box-shadow: var(--shadow-btn);
       }
       .bench-card {
         position: absolute;
@@ -270,8 +320,8 @@
         left: 0;
         right: 0;
         background: var(--card);
-        border: 1px solid var(--border);
         border-radius: 20px 20px 0 0;
+        box-shadow: 0 -6px 30px rgba(17, 24, 39, 0.18);
         z-index: 1500;
         max-height: 75vh;
         overflow-y: auto;
@@ -283,18 +333,20 @@
         transform: translateY(0);
       }
       .bench-card-handle {
-        width: 40px;
-        height: 4px;
-        background: var(--gray);
-        border-radius: 2px;
-        margin: 10px auto;
+        width: 44px;
+        height: 5px;
+        background: #d1d5db;
+        border-radius: 3px;
+        margin: 12px auto;
+        cursor: pointer;
       }
       .bench-card-content {
         padding: 0 20px 20px;
       }
       .bench-card-title {
-        font-size: 1.3em;
+        font-size: 20px;
         font-weight: 700;
+        color: var(--text);
       }
       .bench-card-title i {
         color: var(--primary);
@@ -303,11 +355,14 @@
       .bench-card-distance {
         color: var(--green);
         font-weight: 700;
-        margin: 5px 0;
+        margin: 6px 0;
+        font-size: 14px;
       }
       .bench-card-desc {
         color: var(--gray);
-        margin-bottom: 10px;
+        margin-bottom: 12px;
+        font-size: 14px;
+        line-height: 1.5;
       }
       .bench-card-photos {
         display: flex;
@@ -316,8 +371,8 @@
         padding: 10px 0;
       }
       .bench-card-photos img {
-        width: 200px;
-        height: 200px;
+        width: 160px;
+        height: 160px;
         object-fit: cover;
         border-radius: 12px;
         cursor: pointer;
@@ -335,6 +390,8 @@
         border-radius: 12px;
         font-weight: 700;
         cursor: pointer;
+        font-size: 14px;
+        font-family: inherit;
       }
       .bench-card-btn i {
         margin-right: 5px;
@@ -344,33 +401,35 @@
         color: #fff;
       }
       .btn-reviews {
-        background: var(--bg);
+        background: var(--input-bg);
         color: var(--text);
-        border: 1px solid var(--border);
       }
       .btn-fav {
-        background: var(--bg);
-        border: 1px solid var(--border);
+        background: var(--input-bg);
         width: 50px;
         flex: none;
         color: var(--gray);
         font-size: 1.3em;
         cursor: pointer;
+        border: none;
+        border-radius: 12px;
       }
       .btn-fav.active {
         color: var(--red);
+        background: #fdeceb;
       }
       .btn-report {
-        background: var(--bg);
-        border: 1px solid var(--border);
+        background: var(--input-bg);
         width: 50px;
         flex: none;
         color: var(--gray);
         cursor: pointer;
+        border: none;
+        border-radius: 12px;
+        font-size: 1.1em;
       }
       .btn-like {
-        background: var(--bg);
-        border: 1px solid var(--border);
+        background: var(--input-bg);
         padding: 14px;
         border-radius: 12px;
         font-weight: 700;
@@ -380,14 +439,17 @@
         align-items: center;
         justify-content: center;
         gap: 5px;
+        border: none;
+        font-size: 14px;
+        font-family: inherit;
       }
       .btn-like.active {
         color: var(--primary);
-        border-color: var(--primary);
+        background: #eef1fe;
       }
       .close-btn {
-        background: rgba(45, 109, 168, 0.3);
-        border: 1px solid rgba(45, 109, 168, 0.5);
+        background: rgba(91, 117, 248, 0.12);
+        border: none;
         color: var(--primary);
         width: 44px;
         height: 44px;
@@ -406,7 +468,7 @@
         left: 0;
         right: 0;
         bottom: 0;
-        background: rgba(0, 0, 0, 0.7);
+        background: rgba(17, 24, 39, 0.45);
         z-index: 99999;
         align-items: center;
         justify-content: center;
@@ -417,9 +479,9 @@
       }
       .modal-content {
         background: var(--card);
-        border: 1px solid var(--border);
         border-radius: 20px;
-        padding: 25px;
+        box-shadow: var(--shadow-card);
+        padding: 24px;
         width: 100%;
         max-width: 500px;
         max-height: 85vh;
@@ -430,7 +492,11 @@
         display: flex;
         justify-content: space-between;
         align-items: center;
-        margin-bottom: 15px;
+        margin-bottom: 16px;
+      }
+      .modal-header h2 {
+        font-size: 20px;
+        color: var(--text);
       }
       .toast {
         position: fixed;
@@ -443,6 +509,8 @@
         border-radius: 10px;
         z-index: 100000;
         font-weight: 600;
+        font-size: 14px;
+        box-shadow: var(--shadow-btn);
       }
       .overlay-modal {
         position: fixed;
@@ -450,7 +518,7 @@
         left: 0;
         right: 0;
         bottom: 0;
-        background: rgba(0, 0, 0, 0.8);
+        background: rgba(17, 24, 39, 0.5);
         z-index: 100000;
         display: flex;
         align-items: center;
@@ -459,56 +527,79 @@
       }
       .overlay-box {
         background: var(--card);
-        border: 1px solid var(--border);
         border-radius: 20px;
-        padding: 25px;
+        box-shadow: var(--shadow-card);
+        padding: 28px 24px;
         text-align: center;
-        max-width: 350px;
+        max-width: 360px;
         max-height: 80vh;
         width: 100%;
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
       }
+      .overlay-box h3 {
+        font-size: 18px;
+        color: var(--text);
+        margin-bottom: 12px;
+      }
       .review-item {
-        padding: 15px;
-        background: var(--bg);
-        border-radius: 12px;
-        margin-bottom: 10px;
+        padding: 16px;
+        background: var(--soft);
+        border-radius: 14px;
+        margin-bottom: 12px;
+        border: 1px solid var(--border);
       }
       .profile-stat {
         flex: 1;
         text-align: center;
-        padding: 15px;
-        background: var(--bg);
+        padding: 16px;
+        background: var(--soft);
         border: 1px solid var(--border);
-        border-radius: 12px;
+        border-radius: 14px;
       }
       .profile-stat .v {
-        font-size: 1.5em;
+        font-size: 1.6em;
         font-weight: 700;
         color: var(--primary);
+      }
+      .profile-stat div:last-child {
+        color: var(--gray);
+        font-size: 13px;
+        margin-top: 4px;
       }
       .badge {
         display: inline-block;
         padding: 8px 12px;
         border-radius: 10px;
-        background: var(--bg);
-        border: 1px solid var(--border);
+        background: var(--input-bg);
         margin: 5px;
-        font-size: 0.85em;
+        font-size: 13px;
+        color: var(--text);
       }
       .section-title {
-        font-size: 1.1em;
+        font-size: 18px;
         font-weight: 700;
+        color: var(--text);
         margin: 20px 0 10px;
+      }
+      @media (min-width: 768px) {
+        #mainApp {
+          max-width: 480px;
+          margin: 0 auto;
+          box-shadow: 0 0 50px rgba(0, 0, 0, 0.25);
+        }
+        .auth-card {
+          max-width: 420px;
+        }
       }
     </style>
   </head>
   <body>
     <div id="authScreen">
       <div class="auth-card">
-        <div class="auth-logo"><i class="fa-solid fa-chair"></i></div>
+        <div class="auth-logo"><i class="fa-solid fa-location-dot"></i></div>
         <div class="auth-title">Скамейки Твери</div>
+        <div class="auth-subtitle">Находите лучшие скамейки Твери рядом с вами</div>
         <div class="auth-tabs">
           <div class="auth-tab active" onclick="showLogin()">Вход</div>
           <div class="auth-tab" onclick="showRegister()">Регистрация</div>
@@ -578,7 +669,7 @@
         </button>
       </div>
       <div class="bench-card" id="benchCard">
-        <div class="bench-card-handle"></div>
+        <div class="bench-card-handle" onclick="closeBenchCard()"></div>
         <div class="bench-card-content" id="benchCardContent"></div>
       </div>
     </div>
@@ -586,9 +677,6 @@
       <div class="modal-content">
         <div class="modal-header">
           <h2>Отзывы</h2>
-          <button class="close-btn" onclick="closeModal('reviewsModal')">
-            <i class="fa-solid fa-xmark"></i>
-          </button>
         </div>
         <div id="reviewsContent"></div>
       </div>
@@ -597,9 +685,6 @@
       <div class="modal-content">
         <div class="modal-header">
           <h2>Профиль</h2>
-          <button class="close-btn" onclick="closeModal('profileModal')">
-            <i class="fa-solid fa-xmark"></i>
-          </button>
         </div>
         <div id="profileContent"></div>
       </div>
@@ -608,9 +693,6 @@
       <div class="modal-content">
         <div class="modal-header">
           <h2>Новая скамейка</h2>
-          <button class="close-btn" onclick="closeModal('addModal')">
-            <i class="fa-solid fa-xmark"></i>
-          </button>
         </div>
         <div id="addModalContent"></div>
       </div>
@@ -619,9 +701,6 @@
       <div class="modal-content">
         <div class="modal-header">
           <h2>Поблизости</h2>
-          <button class="close-btn" onclick="closeModal('nearbyModal')">
-            <i class="fa-solid fa-xmark"></i>
-          </button>
         </div>
         <div id="nearbyContent"></div>
       </div>
@@ -630,9 +709,6 @@
       <div class="modal-content">
         <div class="modal-header">
           <h2>Топ</h2>
-          <button class="close-btn" onclick="closeModal('topModal')">
-            <i class="fa-solid fa-xmark"></i>
-          </button>
         </div>
         <div id="topContent"></div>
       </div>
@@ -733,13 +809,20 @@
       function closeModal(id) {
         document.getElementById(id).classList.remove("active");
       }
+      document.querySelectorAll(".modal").forEach(function (m) {
+        m.addEventListener("click", function (e) {
+          if (e.target === m) {
+            m.classList.remove("active");
+          }
+        });
+      });
       function createBenchIcon() {
         return {
           iconLayout: "default#image",
           iconImageHref:
             "data:image/svg+xml;base64," +
             btoa(
-              '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect x="8" y="40" width="48" height="5" rx="2.5" fill="#2d6da8"/><rect x="12" y="18" width="40" height="5" rx="2.5" fill="#3d8bd0"/><rect x="10" y="18" width="5" height="27" rx="2.5" fill="#1e4d7a"/><rect x="49" y="18" width="5" height="27" rx="2.5" fill="#1e4d7a"/><rect x="8" y="45" width="5" height="14" rx="2.5" fill="#1e4d7a"/><rect x="51" y="45" width="5" height="14" rx="2.5" fill="#1e4d7a"/></svg>',
+              '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect x="8" y="40" width="48" height="5" rx="2.5" fill="#5b75f8"/><rect x="12" y="18" width="40" height="5" rx="2.5" fill="#7c8ffb"/><rect x="10" y="18" width="5" height="27" rx="2.5" fill="#3f57d6"/><rect x="49" y="18" width="5" height="27" rx="2.5" fill="#3f57d6"/><rect x="8" y="45" width="5" height="14" rx="2.5" fill="#3f57d6"/><rect x="51" y="45" width="5" height="14" rx="2.5" fill="#3f57d6"/></svg>',
             ),
           iconImageSize: [40, 40],
           iconImageOffset: [-20, -40],
@@ -751,7 +834,7 @@
           iconImageHref:
             "data:image/svg+xml;base64," +
             btoa(
-              '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><path d="M32 2 C18 14 8 26 8 40 C8 53 18 62 32 62 C46 62 56 53 56 40 C56 26 46 14 32 2 Z" fill="#3498db" stroke="white" stroke-width="2"/><circle cx="32" cy="38" r="13" fill="white"/><circle cx="32" cy="38" r="7" fill="#3498db"/></svg>',
+              '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><path d="M32 2 C18 14 8 26 8 40 C8 53 18 62 32 62 C46 62 56 53 56 40 C56 26 46 14 32 2 Z" fill="#5b75f8" stroke="white" stroke-width="2"/><circle cx="32" cy="38" r="13" fill="white"/><circle cx="32" cy="38" r="7" fill="#5b75f8"/></svg>',
             ),
           iconImageSize: [45, 45],
           iconImageOffset: [-22, -45],
@@ -811,7 +894,6 @@
         o.className = "overlay-modal";
         o.innerHTML =
           '<div class="overlay-box" style="position:relative">' +
-          '<button class="close-btn" style="position:absolute;top:10px;right:10px" onclick="this.closest(\'.overlay-modal\').remove()"><i class="fa-solid fa-xmark"></i></button>' +
           contentHtml +
           "</div>";
         o.addEventListener("click", function (e) {
@@ -969,9 +1051,9 @@
           ph += "</div>";
         }
         document.getElementById("benchCardContent").innerHTML =
-          '<div style="display:flex;justify-content:space-between;gap:10px"><div style="flex:1"><div class="bench-card-title"><i class="fa-solid fa-chair"></i>Скамейка</div><div class="bench-card-distance"><i class="fa-solid fa-location-arrow"></i> ' +
+          '<div><div class="bench-card-title"><i class="fa-solid fa-chair"></i>Скамейка</div><div class="bench-card-distance"><i class="fa-solid fa-location-arrow"></i> ' +
           dist +
-          '</div></div><button class="close-btn" onclick="closeBenchCard()"><i class="fa-solid fa-xmark"></i></button></div>' +
+          '</div></div>' +
           (b.description
             ? '<div class="bench-card-desc">' +
               escapeHtml(b.description) +
@@ -980,14 +1062,7 @@
           ph +
           '<div class="bench-card-actions"><button class="bench-card-btn btn-route" onclick="buildRoute()"><i class="fa-solid fa-route"></i>Маршрут</button><button class="bench-card-btn btn-reviews" onclick="openReviews(' +
           b.id +
-          ')"><i class="fa-solid fa-comments"></i>Отзывы</button><button class="btn-fav" onclick="toggleFav(' +
-          b.id +
-          ')"><i class="fa-solid fa-heart"></i></button><button class="btn-like' +
-          (b.liked ? " active" : "") +
-          '" id="likeBtn-' +
-          b.id +
-          '" onclick="toggleLike(' +
-          b.id +
+          ')"><i class="fa-solid fa-comments"></i>Отзывы</button><button class="btn-fav' + (b.favorited ? ' active' : '') + '" id="favBtn-' + b.id + '" onclick="toggleFav(' + b.id + ')"><i class="fa-solid fa-heart"></i></button><button class="btn-like' + (b.liked ? " active" : "") + '" id="likeBtn-' + b.id + '" onclick="toggleLike(' + b.id +
           ')"><i class="fa-solid fa-thumbs-up"></i> <span id="likesCount-' +
           b.id +
           '">' +
@@ -1072,9 +1147,17 @@
           .then(function (r) {
             return r.json();
           })
-          .then(function (d) {
-            showToast(d.favorited ? "Добавлено!" : "Удалено!");
-          });
+           .then(function (d) {
+             showToast(d.favorited ? "Добавлено!" : "Удалено!");
+             var favBtn = document.getElementById("favBtn-" + id);
+             if (favBtn) {
+               if (d.favorited) {
+                 favBtn.classList.add("active");
+               } else {
+                 favBtn.classList.remove("active");
+               }
+             }
+           });
       }
       function reportBench(id) {
         if (!currentUser) {
@@ -1084,7 +1167,7 @@
         var o = document.createElement("div");
         o.className = "overlay-modal";
         o.innerHTML =
-          '<div class="overlay-box" style="position:relative"><button class="close-btn" style="position:absolute;top:10px;right:10px" onclick="this.closest(\'.overlay-modal\').remove()"><i class="fa-solid fa-xmark"></i></button><h3>Жалоба</h3><div class="form-group" style="text-align:left"><label>Причина</label><select id="reportReason" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text)"><option value="not_exists">Скамейки нет</option><option value="broken">Сломана</option><option value="spam">Спам</option></select></div><div class="form-group" style="text-align:left"><label>Фото (необязательно)</label><input type="file" id="reportPhotos" accept="image/*" multiple></div><button class="btn" onclick="sendReport(' +
+          '<div class="overlay-box" style="position:relative"><h3>Жалоба</h3><div class="form-group" style="text-align:left"><label>Причина</label><select id="reportReason" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--bg);color:var(--text)"><option value="not_exists">Скамейки нет</option><option value="broken">Сломана</option><option value="spam">Спам</option></select></div><div class="form-group" style="text-align:left"><label>Фото (необязательно)</label><input type="file" id="reportPhotos" accept="image/*" capture="environment" multiple></div><button class="btn" onclick="sendReport(' +
           id +
           ')">Отправить</button></div>';
         o.addEventListener("click", function (e) {
@@ -1190,7 +1273,7 @@
         var o = document.createElement("div");
         o.className = "overlay-modal";
         o.innerHTML =
-          '<div class="overlay-box" style="position:relative"><button class="close-btn" style="position:absolute;top:10px;right:10px" onclick="this.closest(\'.overlay-modal\').remove()"><i class="fa-solid fa-xmark"></i></button><h3>Отзыв</h3><div id="stars">' +
+          '<div class="overlay-box" style="position:relative"><h3>Отзыв</h3><div id="stars">' +
           [1, 2, 3, 4, 5]
             .map(function (i) {
               return (
@@ -1200,7 +1283,7 @@
               );
             })
             .join("") +
-          '</div><textarea id="revComment" rows="3" style="width:100%;margin:10px 0;padding:10px;border:1px solid var(--border);border-radius:10px;background:var(--bg);color:var(--text)"></textarea><div class="form-group" style="text-align:left"><label>Фото (необязательно)</label><input type="file" id="reviewPhotos" accept="image/*" multiple></div><button class="btn" onclick="submitReview(' +
+          '</div><textarea id="revComment" rows="3" style="width:100%;margin:10px 0;padding:10px;border:1px solid var(--border);border-radius:10px;background:var(--bg);color:var(--text)"></textarea><div class="form-group" style="text-align:left"><label>Фото (необязательно)</label><input type="file" id="reviewPhotos" accept="image/*" capture="environment" multiple></div><button class="btn" onclick="submitReview(' +
           id +
           ')">Отправить</button></div>';
         o.addEventListener("click", function (e) {
@@ -1271,7 +1354,7 @@
           '<p style="padding:15px;color:var(--gray)">Поиск ближайших скамеек...</p>';
         addrList.style.display = "block";
         ymaps
-          .geocode(q, { results: 1 })
+          .geocode("Тверь, " + q, { results: 1 })
           .then(function (res) {
             var firstResult = res.geoObjects.get(0);
             if (!firstResult) {
@@ -1342,12 +1425,16 @@
         clearTimeout(searchTimeout);
         searchTimeout = setTimeout(function () {
           var q = document.getElementById("searchInput").value.trim();
-          if (!q || q.length < 3) {
+          if (!q || q.length < 2) {
             document
               .getElementById("searchResultsList")
               .classList.remove("active");
             return;
           }
+          var list = document.getElementById("searchResultsList");
+          list.innerHTML =
+            '<p style="padding:14px;color:var(--gray)">Поиск...</p>';
+          list.classList.add("active");
           ymaps
             .geocode("Тверь, " + q, { results: 10 })
             .then(function (res) {
@@ -1376,9 +1463,7 @@
               showSearchResults();
             })
             .catch(function (e) {
-              document
-                .getElementById("searchResultsList")
-                .classList.remove("active");
+              list.classList.remove("active");
             });
         }, 500);
       }
@@ -1425,7 +1510,10 @@
         o.innerHTML =
           '<img src="' +
           u +
-          '" style="max-width:95%;border-radius:10px"><button class="close-btn" onclick="closeOverlay(this)"><i class="fa-solid fa-xmark"></i></button>';
+          '" style="max-width:95%;border-radius:10px">';
+        o.addEventListener("click", function (e) {
+          if (e.target === o) o.remove();
+        });
         document.body.appendChild(o);
       }
       function openAddModal() {
@@ -1438,7 +1526,7 @@
           return;
         }
         document.getElementById("addModalContent").innerHTML =
-          '<div class="form-group"><label>Фото (обязательно!)</label><input type="file" id="modalPhotoInput" accept="image/*" multiple></div><div id="photoPreview" style="display:flex;gap:10px;flex-wrap:wrap"></div><div class="form-group"><label>Описание</label><textarea id="modalBenchDesc" rows="3"></textarea></div><button class="btn" onclick="saveBench()">Сохранить</button>';
+          '<div class="form-group"><label>Фото (обязательно!)</label><input type="file" id="modalPhotoInput" accept="image/*" capture="environment" multiple></div><div id="photoPreview" style="display:flex;gap:10px;flex-wrap:wrap"></div><div class="form-group"><label>Описание</label><textarea id="modalBenchDesc" rows="3"></textarea></div><button class="btn" onclick="saveBench()">Сохранить</button>';
         document.getElementById("addModal").classList.add("active");
         document
           .getElementById("modalPhotoInput")
@@ -1849,6 +1937,16 @@
         document.getElementById("mainApp").classList.remove("active");
         closeModal("profileModal");
       }
+      var initialViewportHeight = window.innerHeight;
+      window.addEventListener("resize", function () {
+        if (window.innerHeight < initialViewportHeight * 0.7) {
+          document.getElementById("authScreen").style.height = window.innerHeight + "px";
+          document.getElementById("mainApp").style.height = window.innerHeight + "px";
+        } else {
+          document.getElementById("authScreen").style.height = "";
+          document.getElementById("mainApp").style.height = "";
+        }
+      });
       checkAuth();
     </script>
   </body>

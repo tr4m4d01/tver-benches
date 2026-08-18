@@ -248,17 +248,24 @@ app.get("/api/benches", function (req, res) {
       [b.id],
     );
     var liked = false;
+    var favorited = false;
     if (uid) {
       var likedRows = q(
         "SELECT id FROM bench_likes WHERE bench_id=? AND user_id=?",
         [b.id, uid],
       );
       liked = likedRows.length > 0;
+      var favRows = q(
+        "SELECT id FROM bench_favorites WHERE bench_id=? AND user_id=?",
+        [b.id, uid],
+      );
+      favorited = favRows.length > 0;
     }
     return Object.assign({}, b, {
       photos: photos,
       likes: likes.length ? likes[0].count : 0,
       liked: liked,
+      favorited: favorited,
     });
   });
   res.json({ success: true, benches: withPhotos });
