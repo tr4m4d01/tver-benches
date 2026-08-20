@@ -1,27 +1,69 @@
 <!doctype html>
+<!--
+  ============================================================================
+  index.html — главная страница приложения «Скамейки Твери» (клиентская часть)
+  ----------------------------------------------------------------------------
+  Что внутри:
+    • <head>      — подключение шрифтов, иконок Font Awesome и скрипта Яндекс.Карт
+    • <style>     — весь дизайн (CSS) приложения
+    • <body>      — разметка экранов: вход, карта, модальные окна
+    • <script>    — вся логика: карта, поиск, авторизация, отзывы, избранное и т.д.
+  Приложение работает как одностраничник: экраны переключаются через классы
+  (например, добавление/удаление класса "active" или "hidden").
+  ============================================================================
+-->
 <html lang="ru">
   <head>
     <meta charset="UTF-8" />
+    <!-- Настройки масштаба для мобильных: запрещаем зум, чтобы интерфейс
+         выглядел как нативное приложение -->
     <meta
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
     />
     <title>Скамейки Твери</title>
+    <!-- Иконки Font Awesome (галочки, сердечки, лупа и т.д.) -->
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
     />
+    <!-- Шрифт Inter (предзагрузка и подключение) -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap"
       rel="stylesheet"
     />
+    <!--
+      Скрипт Яндекс.Карт (версия 2.1). Загружается асинхронно (async defer),
+      поэтому глобальный объект `ymaps` появляется позже. Вся инициализация
+      карты происходит внутри ymaps.ready(...) в конце скрипта и защищена
+      флагом ymapsReady, чтобы не вызывать методы карты до готовности.
+      apikey — ключ доступа к API Яндекса.
+    -->
     <script
-      src="https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=1523c569-fb40-448b-8a73-6e1a37b34216"
+      src="https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=1523c569-fb40-448b-8a73-6e1a37b34216&loading=release"
       type="text/javascript"
+      async
+      defer
     ></script>
     <style>
+      /* =======================================================================
+         БЛОК СТИЛЕЙ (CSS)
+         -----------------------------------------------------------------------
+         Здесь описан весь внешний вид приложения. Основные цвета и размеры
+         вынесены в CSS-переменные (в блоке :root), чтобы их было легко менять
+         в одном месте. Ниже стили сгруппированы по экранам/блокам.
+         ======================================================================= */
+
+      /* Цветовая схема и базовые параметры (CSS-переменные).
+         --primary        — основной синий цвет кнопок и акцентов
+         --primary-dark   — тёмный оттенок для нажатия
+         --page-bg        — фон всей страницы (ярко-синий)
+         --card           — цвет карточек (белый)
+         --text / --gray  — тёмный и серый цвета текста
+         --input-bg       — фон полей ввода (светло-серый)
+         --shadow-*       — мягкие тени для карточек и кнопок */
       :root {
         --primary: #5b75f8;
         --primary-dark: #4a5fe0;
@@ -44,9 +86,20 @@
         padding: 0;
         box-sizing: border-box;
       }
+      /* Базовые стили страницы: шрифт Inter, синий фон, тёмный текст.
+         height:100dvh — высота экрана с учётом мобильных браузеров.
+         overflow:hidden — запрещаем прокрутку всей страницы (скроллятся
+         только внутренние блоки, например карточка скамейки). */
       body {
-        font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI",
-          Roboto, Helvetica, Arial, sans-serif;
+        font-family:
+          "Inter",
+          -apple-system,
+          BlinkMacSystemFont,
+          "Segoe UI",
+          Roboto,
+          Helvetica,
+          Arial,
+          sans-serif;
         height: 100vh;
         height: 100dvh;
         overflow: hidden;
@@ -55,6 +108,9 @@
         -webkit-font-smoothing: antialiased;
       }
       #authScreen {
+        /* Экран входа/регистрации. position:fixed + flex по центру делают
+           его «полноэкранной карточкой» поверх всего. z-index:5000 ставит
+           его выше карты. Класс .hidden (display:none) прячет экран после входа. */
         position: fixed;
         top: 0;
         left: 0;
@@ -72,6 +128,7 @@
         display: none;
       }
       .auth-card {
+        /* Белая карточка формы: скруглённые углы 20px и мягкая тень */
         background: var(--card);
         border-radius: 20px;
         box-shadow: var(--shadow-card);
@@ -99,6 +156,7 @@
         margin-bottom: 24px;
       }
       .auth-tabs {
+        /* Переключатель «Вход / Регистрация» в виде сегментированной кнопки */
         display: flex;
         gap: 10px;
         margin-bottom: 20px;
@@ -171,6 +229,9 @@
         margin-right: 6px;
       }
       #mainApp {
+        /* Основной экран с картой. Скрыт (display:none), пока не пройдён вход.
+           Класс .active делает его видимым (flex). position:relative — база для
+           абсолютного позиционирования карты и кнопок внутри. */
         display: none;
         height: 100vh;
         height: 100dvh;
@@ -181,6 +242,7 @@
         display: flex;
       }
       #map {
+        /* Контейнер Яндекс.Карты: занимает весь экран под mainApp */
         position: absolute;
         top: 0;
         left: 0;
@@ -188,6 +250,7 @@
         bottom: 0;
       }
       .search-container {
+        /* Плавающая строка поиска сверху экрана поверх карты */
         position: absolute;
         top: 15px;
         left: 15px;
@@ -195,6 +258,7 @@
         z-index: 2000;
       }
       .search-bar {
+        /* Белая «пилюля» поиска с мягкой тенью */
         background: var(--card);
         border-radius: 20px;
         box-shadow: var(--shadow-soft);
@@ -283,6 +347,8 @@
         font-size: 13px;
       }
       .map-buttons {
+        /* Плавающие кнопки действий (геолокация, добавить, профиль и т.д.).
+           Прижаты к нижнему правому углу поверх карты. */
         position: absolute;
         right: 15px;
         bottom: 90px;
@@ -292,6 +358,8 @@
         gap: 12px;
       }
       .map-btn {
+        /* Отдельная круглая кнопка-«пилюля» белого цвета с тенью */
+        position: relative;
         width: 52px;
         height: 52px;
         border-radius: 16px;
@@ -310,11 +378,16 @@
         transform: scale(0.94);
       }
       .map-btn.primary {
+        /* Главная кнопка (например, «добавить скамейку») — синяя */
         background: var(--primary);
         color: #fff;
         box-shadow: var(--shadow-btn);
       }
       .bench-card {
+        /* Нижняя выезжающая карточка с деталями скамейки.
+           По умолчанию сдвинута вниз (translateY(100%)) и скрыта; класс
+           .active возвращает её на место. max-height + overflow делают
+           карточку прокручиваемой, если контента много. */
         position: absolute;
         bottom: 0;
         left: 0;
@@ -462,6 +535,9 @@
         flex-shrink: 0;
       }
       .modal {
+        /* Всплывающее модальное окно (профиль, отзывы, добавить скамейку).
+           Полупрозрачная подложка + центрированная карточка. Скрыто по
+           умолчанию (display:none); класс .active показывает его. */
         display: none;
         position: fixed;
         top: 0;
@@ -478,6 +554,7 @@
         display: flex !important;
       }
       .modal-content {
+        /* Белая карточка содержимого модального окна */
         background: var(--card);
         border-radius: 20px;
         box-shadow: var(--shadow-card);
@@ -513,6 +590,9 @@
         box-shadow: var(--shadow-btn);
       }
       .overlay-modal {
+        /* Небольшие всплывающие окна (уведомления, подтверждения, формы
+           жалобы/отзыва). Похожи на .modal, но с более тёмной подложкой и
+           меньшей карточкой. Создаются динамически в JavaScript. */
         position: fixed;
         top: 0;
         left: 0;
@@ -582,6 +662,238 @@
         color: var(--text);
         margin: 20px 0 10px;
       }
+      /* Кнопка "вверх" (прокрутка к верху) */
+      #backToTop {
+        display: none;
+        position: absolute;
+        bottom: 170px;
+        left: 15px;
+        width: 44px;
+        height: 44px;
+        border-radius: 14px;
+        background: var(--card);
+        box-shadow: var(--shadow-soft);
+        align-items: center;
+        justify-content: center;
+        font-size: 1.2em;
+        color: var(--gray);
+        z-index: 1001;
+      }
+      #backToTop.show {
+        display: flex;
+      }
+      /* Индикатор загрузки карты (показывается пока ymaps готовится) */
+      #mapPreloader {
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        background: var(--page-bg);
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        z-index: 2000;
+        transition: opacity 0.3s;
+      }
+      #mapPreloader.hide {
+        opacity: 0;
+        pointer-events: none;
+      }
+      #mapPreloader i {
+        font-size: 3em;
+        color: #fff;
+        margin-bottom: 15px;
+      }
+      #mapPreloader .loading-text {
+        color: #fff;
+        font-size: 14px;
+      }
+      /* Панель уведомлений (выпадает из-под колокна) */
+      .notifications-panel {
+        position: absolute;
+        bottom: 162px;
+        right: 15px;
+        background: var(--card);
+        border-radius: 16px;
+        box-shadow: var(--shadow-card);
+        border: 1px solid var(--border);
+        width: 300px;
+        max-height: 400px;
+        overflow-y: auto;
+        z-index: 3000;
+        display: none;
+      }
+      .notifications-panel.active {
+        display: block;
+      }
+      .notifications-panel .notif-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border);
+      }
+      .notifications-panel .notif-header h4 {
+        font-size: 16px;
+        font-weight: 700;
+      }
+      .notifications-panel .notif-clear {
+        background: none;
+        border: none;
+        color: var(--gray);
+        cursor: pointer;
+        font-size: 13px;
+      }
+      .notifications-panel .notif-list {
+        max-height: 320px;
+        overflow-y: auto;
+      }
+      .notif-item {
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--border);
+        cursor: pointer;
+      }
+      .notif-item:last-child {
+        border-bottom: none;
+      }
+      .notif-item.unread {
+        background: #f0f4ff;
+      }
+      .notif-item .notif-msg {
+        font-size: 13px;
+        color: var(--text);
+        margin-bottom: 4px;
+      }
+      .notif-item .notif-time {
+        font-size: 11px;
+        color: var(--gray);
+      }
+      .notif-badge {
+        position: absolute;
+        top: -5px;
+        right: -5px;
+        background: var(--red);
+        color: #fff;
+        border-radius: 50%;
+        min-width: 18px;
+        height: 18px;
+        font-size: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 2px 4px;
+        z-index: 1;
+      }
+      /* Аватары */
+      .avatar {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        object-fit: cover;
+        border: 2px solid var(--card);
+        box-shadow: var(--shadow-soft);
+      }
+      .avatar-sm {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        object-fit: cover;
+      }
+      .avatar-default {
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        background: var(--primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-size: 1.4em;
+        border: 2px solid var(--card);
+        box-shadow: var(--shadow-soft);
+        object-fit: cover;
+      }
+      .avatar-default-sm {
+        width: 32px;
+        height: 32px;
+        border-radius: 50%;
+        background: var(--primary);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        color: #fff;
+        font-size: 1.1em;
+      }
+      /* Ошибка поиска */
+      .search-error {
+        background: #fdecec;
+        border: 1px solid var(--red);
+        color: var(--red);
+        border-radius: 12px;
+        padding: 12px 16px;
+        font-size: 13px;
+        margin-top: 8px;
+        display: none;
+      }
+      .search-error.active {
+        display: block;
+      }
+      /* Скрытая колонка для swipe */
+      .bench-card.hidden {
+        display: none;
+      }
+      /* Анимация slideUp для карточки */
+      .bench-card.slide-up {
+        transition:
+          transform 0.3s ease-out,
+          opacity 0.3s ease-out;
+      }
+      /* Draggable marker overlay on map during bench creation */
+      .marker-drag-overlay {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        z-index: 10000;
+        pointer-events: none;
+      }
+      .marker-drag-overlay i {
+        font-size: 2.5em;
+        color: var(--primary);
+        text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+        animation: pulse 1.5s infinite;
+      }
+      @keyframes pulse {
+        0% {
+          transform: scale(1);
+          opacity: 0.8;
+        }
+        50% {
+          transform: scale(1.2);
+          opacity: 0.4;
+        }
+        100% {
+          transform: scale(1);
+          opacity: 0.8;
+        }
+      }
+      /* Admin comment badge in bench card */
+      .admin-comment-badge {
+        background: #fff3cd;
+        border: 1px solid var(--yellow);
+        color: #856404;
+        border-radius: 10px;
+        padding: 10px 14px;
+        margin-top: 10px;
+        font-size: 13px;
+        line-height: 1.4;
+      }
+      .admin-comment-badge i {
+        color: #856404;
+        margin-right: 6px;
+      }
       @media (min-width: 768px) {
         #mainApp {
           max-width: 480px;
@@ -595,15 +907,31 @@
     </style>
   </head>
   <body>
+    <!--
+      =====================================================================
+      ТЕЛО СТРАНИЦЫ (HTML)
+      Основные блоки:
+        #authScreen  — экран входа/регистрации (прячется после авторизации)
+        #mainApp     — основной экран: карта, поиск, кнопки, карточка скамейки
+        Модальные окна (#reviewsModal, #profileModal, #addModal, #nearbyModal,
+          #topModal) и динамические всплывающие окна (.overlay-modal)
+      =====================================================================
+    -->
+
+    <!-- ЭКРАН ВХОДА: форма авторизации и регистрации -->
     <div id="authScreen">
       <div class="auth-card">
         <div class="auth-logo"><i class="fa-solid fa-location-dot"></i></div>
         <div class="auth-title">Скамейки Твери</div>
-        <div class="auth-subtitle">Находите лучшие скамейки Твери рядом с вами</div>
+        <div class="auth-subtitle">
+          Находите лучшие скамейки Твери рядом с вами
+        </div>
         <div class="auth-tabs">
+          <!-- Переключатели режима: показывают нужный блок ниже -->
           <div class="auth-tab active" onclick="showLogin()">Вход</div>
           <div class="auth-tab" onclick="showRegister()">Регистрация</div>
         </div>
+        <!-- Блок входа. Поля loginLogin/loginPassword читаются в doLogin() -->
         <div id="loginBox">
           <div class="form-group">
             <label>Логин</label><input type="text" id="loginLogin" />
@@ -613,6 +941,8 @@
           </div>
           <button class="btn" onclick="doLogin()">Войти</button>
         </div>
+        <!-- Блок регистрации (скрыт, пока не выбран таб «Регистрация»).
+             Поля regLogin/regNickname/regPassword читаются в doRegister() -->
         <div id="registerBox" style="display: none">
           <div class="form-group">
             <label>Логин (англ.)</label><input type="text" id="regLogin" />
@@ -627,10 +957,22 @@
         </div>
       </div>
     </div>
+
+    <!-- ОСНОВНОЙ ЭКРАН ПРИЛОЖЕНИЯ (карта + интерфейс).
+         Становится видимым после успешного входа (класс .active). -->
     <div id="mainApp">
+      <!-- Индикатор загрузки карты (показывается пока ymaps готовится) -->
+      <div id="mapPreloader">
+        <i class="fa-solid fa-spinner fa-spin"></i>
+        <div class="loading-text">Загрузка карты...</div>
+      </div>
+      <!-- Контейнер Яндекс.Карты (в него монтируется карта из JS) -->
       <div id="map"></div>
+      <!-- Плавающая строка поиска сверху -->
       <div class="search-container">
         <div class="search-bar">
+          <!-- searchInput — поле ввода; searchBenches() ищет по мере ввода,
+               searchByAddress() ищет по нажатию кнопки -->
           <i class="fa-solid fa-magnifying-glass"></i
           ><input
             type="text"
@@ -645,34 +987,76 @@
             <i class="fa-solid fa-magnifying-glass"></i>
           </button>
         </div>
+        <!-- Сообщение об ошибке поиска -->
+        <div class="search-error" id="searchError"></div>
+        <!-- Список результатов поиска (заполняется из JS) -->
         <div id="searchResultsList"></div>
+        <!-- Блок ближайших скамеек к введённому адресу -->
         <div id="addressResults" style="display: none"></div>
       </div>
+      <!-- Выпадающая панель уведомлений -->
+      <div class="notifications-panel" id="notificationsPanel">
+        <div class="notif-header">
+          <h4>Уведомления</h4>
+          <button class="notif-clear" onclick="clearNotifications()">
+            Очистить
+          </button>
+        </div>
+        <div class="notif-list" id="notifList"></div>
+      </div>
+      <!-- Плавающие кнопки действий внизу справа -->
       <div class="map-buttons">
+        <!-- Колоконь уведомлений -->
+        <button
+          class="map-btn"
+          onclick="toggleNotifications()"
+          id="notifBellBtn"
+        >
+          <i class="fa-solid fa-bell"></i>
+          <span class="notif-badge" id="notifBadge" style="display: none"
+            >0</span
+          >
+        </button>
+        <!-- Определить моё местоположение -->
         <button class="map-btn" onclick="findMe()">
           <i class="fa-solid fa-location-crosshairs"></i>
         </button>
+        <!-- Скамейки рядом -->
         <button class="map-btn" onclick="showNearby()">
           <i class="fa-solid fa-chair"></i>
         </button>
+        <!-- Добавить скамейку (главная, синяя) -->
         <button class="map-btn primary" onclick="openAddModal()">
           <i class="fa-solid fa-plus"></i>
         </button>
+        <!-- Обновить список скамеек -->
         <button class="map-btn" onclick="loadBenches()">
           <i class="fa-solid fa-rotate"></i>
         </button>
+        <!-- Открыть профиль -->
         <button class="map-btn" onclick="openProfile()">
           <i class="fa-solid fa-user"></i>
         </button>
+        <!-- Топ пользователей -->
         <button class="map-btn" onclick="openTopUsers()">
           <i class="fa-solid fa-trophy"></i>
         </button>
       </div>
-      <div class="bench-card" id="benchCard">
-        <div class="bench-card-handle" onclick="closeBenchCard()"></div>
+      <!-- Выезжающая снизу карточка с деталями выбранной скамейки.
+           Содержимое (benchCardContent) заполняется в showBenchCard().
+           Полоска сверху (bench-card-handle) закрывает карточку по клику.
+           Swipe-down также закрывает карточку (обрабатывается в JS). -->
+      <div class="bench-card slide-up" id="benchCard">
+        <div class="bench-card-handle" id="benchCardHandle"></div>
         <div class="bench-card-content" id="benchCardContent"></div>
       </div>
+      <!-- Индикатор перетаскивания маркера при создании скамейки -->
+      <div class="marker-drag-overlay" id="markerDragOverlay">
+        <i class="fa-solid fa-map-pin"></i>
+      </div>
     </div>
+
+    <!-- МОДАЛЬНОЕ ОКНО: отзывы к скамейке (#reviewsContent заполняется в openReviews) -->
     <div id="reviewsModal" class="modal">
       <div class="modal-content">
         <div class="modal-header">
@@ -681,6 +1065,7 @@
         <div id="reviewsContent"></div>
       </div>
     </div>
+    <!-- МОДАЛЬНОЕ ОКНО: профиль пользователя -->
     <div id="profileModal" class="modal">
       <div class="modal-content">
         <div class="modal-header">
@@ -713,17 +1098,41 @@
         <div id="topContent"></div>
       </div>
     </div>
+
+    <!--
+      =====================================================================
+      СКРИПТ (JavaScript) — вся логика интерфейса
+      ---------------------------------------------------------------------
+      Здесь: глобальные переменные, работа с Яндекс.Картами, авторизация,
+      поиск, отзывы, избранное/лайки, жалобы, профиль, модальные окна.
+      Все функции описаны ниже с пояснениями.
+      =====================================================================
+    -->
     <script>
+      // ---- Глобальные переменные (доступны из всех функций) --------------
+      // currentUser  — данные вошедшего пользователя (или null, если не вошёл)
+      // userPosition — координаты пользователя {lat, lng}, полученные от GPS
+      // myMap        — объект карты Яндекс (создаётся в ymaps.ready)
+      // userPlacemark— метка текущего местоположения на карте
+      // allBenches   — массив всех загруженных скамеек (для поиска/фильтрации)
+      // selectedBench— скамейка, открытая сейчас в нижней карточке
+      // searchResults— результаты поиска по адресу
+      // searchTimeout— таймер для «отложенного» поиска (чтобы не дёргать API
+      //                на каждую введённую букву)
+      // reviewRating — выбранная оценка при написании отзыва (1–5)
       var currentUser = null,
         userPosition = null,
         myMap = null,
+        mapInitialized = false,
         userPlacemark = null,
         allBenches = [],
         selectedBench = null,
         searchResults = [],
         searchTimeout = null,
         reviewRating = 0,
-        profileInterval = null;
+        profileInterval = null,
+        dragPlacemark = null,
+        isDraggingMarker = false;
       if (window.Telegram && window.Telegram.WebApp) {
         var tg = window.Telegram.WebApp;
         tg.ready();
@@ -757,6 +1166,9 @@
           tg.BackButton.hide();
         });
       }
+      // ---- Фильтр нецензурной лексики ------------------------------------
+      // Список запрещённых слов. Используется, чтобы не публиковать мат в
+      // никнеймах и отзывах. Проверка регистронезависимая.
       var badWords = [
         "блять",
         "сука",
@@ -781,7 +1193,10 @@
         "дурак",
         "тупой",
         "урод",
+        "мразь",
+        "Путин",
       ];
+      // containsBadWords(t): возвращает true, если в тексте t есть запрещённое слово
       function containsBadWords(t) {
         if (!t) return false;
         var l = t.toLowerCase();
@@ -790,15 +1205,35 @@
         }
         return false;
       }
+      // isValidLatin(s): проверяет, что логин состоит только из латиницы,
+      // цифр и подчёркивания (по требованию регистрации)
       function isValidLatin(s) {
         return /^[a-zA-Z0-9_]+$/.test(s);
       }
+      // escapeHtml(text): «безопасно» вставляет пользовательский текст в HTML,
+      // экранируя спецсимволы (защита от вставки скриптов/разметки)
       function escapeHtml(text) {
         if (!text) return "";
         var div = document.createElement("div");
         div.textContent = text;
         return div.innerHTML;
       }
+      // avatarHtml(url, name, size): возвращает HTML <img> с аватаром или
+      // заглушку с инициалами, если аватар не задан.
+      // size: 'sm' (32px) или 'lg' (40px)
+      function avatarHtml(url, name, size) {
+        var cls = size === "sm" ? "avatar-sm" : "avatar";
+        var defCls = size === "sm" ? "avatar-default-sm" : "avatar-default";
+        if (url) {
+          var u = url;
+          if (u.indexOf("/") === 0) u = window.location.origin + u;
+          return '<img src="' + u + '" class="' + cls + '" alt="avatar">';
+        }
+        var initial = name ? name.charAt(0).toUpperCase() : "?";
+        return '<div class="' + defCls + '">' + initial + "</div>";
+      }
+      // authHeaders(): формирует заголовки для запросов, требующих авторизации.
+      // Добавляет токен в виде "Bearer <токен>", если пользователь вошёл.
       function authHeaders() {
         var headers = {};
         if (currentUser && currentUser.token) {
@@ -807,8 +1242,25 @@
         return headers;
       }
       function closeModal(id) {
+        // Прячет модальное окно, убирая у него класс "active"
         document.getElementById(id).classList.remove("active");
+        // Очистка при закрытии модального окна добавления скамейки
+        if (id === "addModal") {
+          if (dragPlacemark && myMap) {
+            myMap.geoObjects.remove(dragPlacemark);
+            dragPlacemark = null;
+          }
+          var overlay = document.getElementById("markerDragOverlay");
+          if (overlay) overlay.style.display = "none";
+        }
+        // Закрываем панель уведомлений при закрытии любого модального окна
+        var panel = document.getElementById("notificationsPanel");
+        if (panel && panel.classList.contains("active")) {
+          panel.classList.remove("active");
+        }
       }
+      // Клик по затемнённой подложке модального окна (но не по самой карточке)
+      // закрывает окно — удобно для мобильных, где нет крестика.
       document.querySelectorAll(".modal").forEach(function (m) {
         m.addEventListener("click", function (e) {
           if (e.target === m) {
@@ -816,6 +1268,11 @@
           }
         });
       });
+
+      // ---- РАБОТА С ЯНДЕКС.КАРТАМИ ----------------------------------------
+      // createBenchIcon(): возвращает настройки метки для скамейки.
+      // Иконка задана как готовая картинка (SVG-скамейка в base64),
+      // а не стандартная булавка, чтобы скамейки выглядели узнаваемо.
       function createBenchIcon() {
         return {
           iconLayout: "default#image",
@@ -825,9 +1282,10 @@
               '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect x="8" y="40" width="48" height="5" rx="2.5" fill="#5b75f8"/><rect x="12" y="18" width="40" height="5" rx="2.5" fill="#7c8ffb"/><rect x="10" y="18" width="5" height="27" rx="2.5" fill="#3f57d6"/><rect x="49" y="18" width="5" height="27" rx="2.5" fill="#3f57d6"/><rect x="8" y="45" width="5" height="14" rx="2.5" fill="#3f57d6"/><rect x="51" y="45" width="5" height="14" rx="2.5" fill="#3f57d6"/></svg>',
             ),
           iconImageSize: [40, 40],
-          iconImageOffset: [-20, -40],
+          iconImageOffset: [-20, -40], // смещение, чтобы «носик» метки был в точке
         };
       }
+      // createUserIcon(): метка текущего местоположения пользователя (синяя булавка)
       function createUserIcon() {
         return {
           iconLayout: "default#image",
@@ -840,20 +1298,42 @@
           iconImageOffset: [-22, -45],
         };
       }
+      // ymaps.ready(...) — запускается, когда карта полностью загрузилась.
+      // Создаём объект карты в контейнере #map, центрируем на Твери (zoom 13),
+      // скрываем прелоудер и сразу загружаем скамейки.
+      var hidePreloader = function () {
+        var pre = document.getElementById("mapPreloader");
+        if (pre) {
+          pre.classList.add("hide");
+          setTimeout(function () {
+            if (pre.parentNode) pre.parentNode.removeChild(pre);
+          }, 300);
+        }
+      };
       ymaps.ready(function () {
-        myMap = new ymaps.Map("map", {
-          center: [56.8587, 35.9176],
-          zoom: 13,
-          controls: [],
-        });
-        loadBenches();
-      });
+         mapInitialized = true;
+         myMap = new ymaps.Map("map", {
+           center: [56.8587, 35.9176],
+           zoom: 13,
+           controls: [],
+         });
+         try { myMap.container.fit(); } catch (e) {}
+         hidePreloader();
+         loadBenches();
+        
+         // Try to find user location after map is ready
+         findMe();
+ });
+
+      // ---- ПЕРЕКЛЮЧЕНИЕ ФОРМ ВХОДА/РЕГИСТРАЦИИ ---------------------------
+      // showLogin(): показывает блок входа, прячет регистрацию
       function showLogin() {
         document.querySelectorAll(".auth-tab")[0].classList.add("active");
         document.querySelectorAll(".auth-tab")[1].classList.remove("active");
         document.getElementById("loginBox").style.display = "block";
         document.getElementById("registerBox").style.display = "none";
       }
+      // showRegister(): наоборот, показывает регистрацию
       function showRegister() {
         document.querySelectorAll(".auth-tab")[1].classList.add("active");
         document.querySelectorAll(".auth-tab")[0].classList.remove("active");
@@ -903,8 +1383,12 @@
         return o;
       }
       function closeOverlay(el) {
+        // Закрывает всплывающее окно .overlay-modal по клику на крестик внутри
         el.closest(".overlay-modal").remove();
       }
+      // ---- РЕГИСТРАЦИЯ ----------------------------------------------------
+      // doRegister(): считывает поля регистрации, проверяет их (латиница
+      // логина, отсутствие мата) и отправляет POST /api/register.
       function doRegister() {
         var l = document.getElementById("regLogin").value.trim(),
           n = document.getElementById("regNickname").value.trim(),
@@ -938,6 +1422,10 @@
             }
           });
       }
+      // ---- ВХОД ------------------------------------------------------------
+      // doLogin(): отправляет логин/пароль на POST /api/login. При успехе
+      // сохраняет пользователя (с токеном) в localStorage, прячет экран входа,
+      // показывает карту и через секунду определяет местоположение.
       function doLogin() {
         var l = document.getElementById("loginLogin").value.trim(),
           p = document.getElementById("loginPassword").value;
@@ -961,23 +1449,44 @@
               document.getElementById("authScreen").classList.add("hidden");
               document.getElementById("mainApp").classList.add("active");
               loadBenches();
-              setTimeout(findMe, 1000);
+              // Refresh notification badge after login
+              setTimeout(function () {
+                updateNotifBadge();
+              }, 500);
             } else {
               showOverlay("fa-xmark", "#e74c3c", "Ошибка", d.error);
             }
           });
       }
+      // checkAuth(): при загрузке страницы проверяет, есть ли сохранённый
+      // пользователь в localStorage. Если да — сразу открывает карту (не надо
+      // входить заново), иначе остаётся экран входа.
       function checkAuth() {
-        var s = localStorage.getItem("tver_user");
-        if (s) {
-          currentUser = JSON.parse(s);
-          document.getElementById("authScreen").classList.add("hidden");
-          document.getElementById("mainApp").classList.add("active");
-          setTimeout(findMe, 1000);
+         var s = localStorage.getItem("tver_user");
+         if (s) {
+           try { currentUser = JSON.parse(s); } catch (e) { currentUser = null; }
+         }
+         document.getElementById("authScreen").classList.add("hidden");
+         document.getElementById("mainApp").classList.add("active");
+         refreshMap();
+       }
+      // refreshMap(): если карта уже инициализирована (но контейнер был скрыт),
+      // заставляем её перестроиться. Если ещё не готова — ymaps.ready сделает это.
+      function refreshMap() {
+        if (myMap && mapInitialized) {
+          setTimeout(function () {
+            if (myMap && typeof myMap.container !== "undefined" && myMap.container.fit) {
+              try { myMap.container.fit(); } catch (e) {}
+            }
+            loadBenches();
+          }, 300);
         }
       }
+      // findMe(): запрашивает геопозицию браузера (GPS/WiFi). При успехе
+      // сохраняет координаты в userPosition и ставит синюю метку на карте,
+      // центрируя её на пользователе.
       function findMe() {
-        if (navigator.geolocation && myMap) {
+        if (navigator.geolocation && mapInitialized && myMap) {
           navigator.geolocation.getCurrentPosition(
             function (pos) {
               userPosition = {
@@ -999,8 +1508,11 @@
           );
         }
       }
+      // loadBenches(): загружает все активные скамейки (GET /api/benches),
+      // очищает карту и расставляет метки. user_id передаётся, чтобы сервер
+      // пометил, какие скамейки лайкнуты/в избранном у текущего пользователя.
       function loadBenches() {
-        if (!myMap) return;
+        if (!mapInitialized || !myMap) return;
         fetch(
           "/api/benches?user_id=" +
             (currentUser && currentUser.id ? currentUser.id : ""),
@@ -1028,6 +1540,11 @@
             });
           });
       }
+      // showBenchCard(b): открывает нижнюю карточку с деталями скамейки b.
+      // Считает расстояние от пользователя (calcDist), собирает HTML с фото,
+      // описанием и кнопками (маршрут, отзывы, избранное, лайк, жалоба) и
+      // вставляет в #benchCardContent, затем показывает карточку и центрирует
+      // карту на этой скамейке.
       function showBenchCard(b) {
         selectedBench = b;
         var dist = "";
@@ -1045,24 +1562,57 @@
           ph = '<div class="bench-card-photos">';
           b.photos.forEach(function (p) {
             var u = p.photo_url;
+            // Относительные пути (начинаются с "/") дополняем адресом сайта
             if (u.indexOf("/") === 0) u = window.location.origin + u;
             ph += '<img src="' + u + '" onclick="openPhoto(this.src)">';
           });
           ph += "</div>";
         }
+        // Аватар автора скамейки
+        var authorAvatar = avatarHtml(
+          b.user_avatar,
+          b.user_name || b.user_id,
+          "sm",
+        );
+        // Комментарий админа (для отклонённых скамеек)
+        var adminComment = "";
+        if (b.admin_comment) {
+          adminComment =
+            '<div class="admin-comment-badge"><i class="fa-solid fa-comment-dots"></i>' +
+            escapeHtml(b.admin_comment) +
+            "</div>";
+        }
         document.getElementById("benchCardContent").innerHTML =
-          '<div><div class="bench-card-title"><i class="fa-solid fa-chair"></i>Скамейка</div><div class="bench-card-distance"><i class="fa-solid fa-location-arrow"></i> ' +
+          '<div><div class="bench-card-title"><i class="fa-solid fa-chair"></i>Скамейка</div>' +
+          '<div style="display:flex;align-items:center;gap:8px;margin:6px 0;color:var(--gray);font-size:13px">' +
+          authorAvatar +
+          "<span>Автор: " +
+          escapeHtml(b.user_name || "Аноним") +
+          "</span></div>" +
+          '<div class="bench-card-distance"><i class="fa-solid fa-location-arrow"></i> ' +
           dist +
-          '</div></div>' +
+          "</div></div>" +
           (b.description
             ? '<div class="bench-card-desc">' +
               escapeHtml(b.description) +
               "</div>"
             : "") +
+          adminComment +
           ph +
           '<div class="bench-card-actions"><button class="bench-card-btn btn-route" onclick="buildRoute()"><i class="fa-solid fa-route"></i>Маршрут</button><button class="bench-card-btn btn-reviews" onclick="openReviews(' +
           b.id +
-          ')"><i class="fa-solid fa-comments"></i>Отзывы</button><button class="btn-fav' + (b.favorited ? ' active' : '') + '" id="favBtn-' + b.id + '" onclick="toggleFav(' + b.id + ')"><i class="fa-solid fa-heart"></i></button><button class="btn-like' + (b.liked ? " active" : "") + '" id="likeBtn-' + b.id + '" onclick="toggleLike(' + b.id +
+          ')"><i class="fa-solid fa-comments"></i>Отзывы</button><button class="btn-fav' +
+          (b.favorited ? " active" : "") +
+          '" id="favBtn-' +
+          b.id +
+          '" onclick="toggleFav(' +
+          b.id +
+          ')"><i class="fa-solid fa-heart"></i></button><button class="btn-like' +
+          (b.liked ? " active" : "") +
+          '" id="likeBtn-' +
+          b.id +
+          '" onclick="toggleLike(' +
+          b.id +
           ')"><i class="fa-solid fa-thumbs-up"></i> <span id="likesCount-' +
           b.id +
           '">' +
@@ -1071,10 +1621,58 @@
           b.id +
           ')"><i class="fa-solid fa-flag"></i></button></div>';
         document.getElementById("benchCard").classList.add("active");
-        myMap.setCenter([b.latitude, b.longitude], 17);
+        if (myMap) myMap.setCenter([b.latitude, b.longitude], 17);
+      }
+      // ---- Bench card swipe-to-close -----------------------------------------
+      // Закрытие карточки скамейки: на мобильных — свайп вниз по полоске
+      // сверху; на десктопе — клик по полоске или протягивание вниз мышью.
+      var swipeStartY = 0,
+        swipeStartX = 0,
+        swipeThreshold = 60,
+        swipeDragging = false;
+      function initBenchCardSwipe() {
+        var handle = document.getElementById("benchCardHandle");
+        if (!handle) return;
+        // Десктоп: клик по полоске закрывает карточку
+        handle.addEventListener("click", function () { closeBenchCard(); });
+        handle.addEventListener("mousedown", onSwipeStart);
+        handle.addEventListener("touchstart", onSwipeStart, { passive: true });
+        function onSwipeStart(e) {
+          swipeDragging = true;
+          var touch = e.touches ? e.touches[0] : e;
+          swipeStartY = touch.clientY;
+          swipeStartX = touch.clientX;
+          if (e.cancelable) e.preventDefault();
+          // Слушаем на document, т.к. на десктопе курсор быстро уходит
+          // за пределы тонкой полоски и mousemove на ней перестаёт приходить.
+          document.addEventListener("mousemove", moveFn);
+          document.addEventListener("mouseup", endFn);
+          document.addEventListener("touchmove", moveFn, { passive: true });
+          document.addEventListener("touchend", endFn);
+        }
+        function moveFn(ev) {
+          if (!swipeDragging) return;
+          var t = ev.touches ? ev.touches[0] : ev;
+          var dy = t.clientY - swipeStartY;
+          if (dy > swipeThreshold) {
+            closeBenchCard();
+            cleanup();
+          }
+        }
+        function endFn() {
+          cleanup();
+        }
+        function cleanup() {
+          swipeDragging = false;
+          document.removeEventListener("mousemove", moveFn);
+          document.removeEventListener("mouseup", endFn);
+          document.removeEventListener("touchmove", moveFn);
+          document.removeEventListener("touchend", endFn);
+        }
       }
       function closeBenchCard() {
-        document.getElementById("benchCard").classList.remove("active");
+        var card = document.getElementById("benchCard");
+        if (card) card.classList.remove("active");
       }
       function buildRoute() {
         if (!selectedBench || !userPosition) {
@@ -1094,6 +1692,10 @@
           "_blank",
         );
       }
+      // ---- СИСТЕМА ЛАЙКОВ -------------------------------------------------
+      // toggleLike(id): ставит или снимает лайк со скамейки (сервер сам
+      // переключает состояние). После ответа обновляет счётчик лайков и
+      // подсвечивает кнопку (#likeBtn-id) классом "active".
       function toggleLike(id) {
         if (!currentUser) {
           showToast("Войдите");
@@ -1131,6 +1733,10 @@
             showToast("Ошибка соединения с сервером");
           });
       }
+      // ---- СИСТЕМА ИЗБРАННОГО ----------------------------------------------
+      // toggleFav(id): добавляет/убирает скамейку из избранного (сервер
+      // переключает). После ответа подсвечивает сердечко (#favBtn-id)
+      // классом "active" красным цветом, если добавлено.
       function toggleFav(id) {
         if (!currentUser) {
           showToast("Войдите");
@@ -1147,17 +1753,17 @@
           .then(function (r) {
             return r.json();
           })
-           .then(function (d) {
-             showToast(d.favorited ? "Добавлено!" : "Удалено!");
-             var favBtn = document.getElementById("favBtn-" + id);
-             if (favBtn) {
-               if (d.favorited) {
-                 favBtn.classList.add("active");
-               } else {
-                 favBtn.classList.remove("active");
-               }
-             }
-           });
+          .then(function (d) {
+            showToast(d.favorited ? "Добавлено!" : "Удалено!");
+            var favBtn = document.getElementById("favBtn-" + id);
+            if (favBtn) {
+              if (d.favorited) {
+                favBtn.classList.add("active");
+              } else {
+                favBtn.classList.remove("active");
+              }
+            }
+          });
       }
       function reportBench(id) {
         if (!currentUser) {
@@ -1239,9 +1845,11 @@
                   ph += "</div>";
                 }
                 h +=
-                  '<div class="review-item"><div style="display:flex;justify-content:space-between;align-items:center"><b>' +
+                  '<div class="review-item"><div style="display:flex;justify-content:space-between;align-items:center"><div style="display:flex;align-items:center;gap:8px"><span>' +
+                  avatarHtml(rev.reviewer_avatar, rev.nickname, "sm") +
+                  "</span><b>" +
                   escapeHtml(rev.nickname) +
-                  "</b>" +
+                  "</b></div>" +
                   (currentUser && currentUser.id !== rev.user_id
                     ? '<button class="btn-sm" style="background:#5a6b7d;color:#fff;border:none;border-radius:8px;padding:6px 10px;cursor:pointer;font-size:.8em" onclick="reportReview(' +
                       rev.id +
@@ -1343,7 +1951,17 @@
       }
       function searchByAddress() {
         clearTimeout(searchTimeout);
+        if (typeof ymaps === "undefined" || !ymaps.geocode) {
+          var errEl = document.getElementById("searchError");
+          if (errEl) {
+            errEl.textContent = "Карта ещё не загружена. Подождите...";
+            errEl.classList.add("active");
+          }
+          return;
+        }
         var q = document.getElementById("searchInput").value.trim();
+        var errEl = document.getElementById("searchError");
+        if (errEl) errEl.classList.remove("active");
         if (!q || q.length < 2) {
           showToast("Введите адрес");
           return;
@@ -1358,8 +1976,11 @@
           .then(function (res) {
             var firstResult = res.geoObjects.get(0);
             if (!firstResult) {
-              addrList.innerHTML =
-                '<p style="padding:15px;color:var(--gray)">Адрес не найден</p>';
+              addrList.innerHTML = "";
+              if (errEl) {
+                errEl.textContent = "Адрес не найден. Проверьте написание.";
+                errEl.classList.add("active");
+              }
               return;
             }
             var c = firstResult.geometry.getCoordinates();
@@ -1382,8 +2003,11 @@
               return a._dist - b._dist;
             });
             if (!results.length) {
-              addrList.innerHTML =
-                '<p style="padding:15px;color:var(--gray)">Нет скамеек в радиусе 5 км</p>';
+              addrList.innerHTML = "";
+              if (errEl) {
+                errEl.textContent = "Нет скамеек в радиусе 5 км";
+                errEl.classList.add("active");
+              }
               return;
             }
             addrList.innerHTML = results
@@ -1407,8 +2031,11 @@
             if (myMap) myMap.setCenter([c[0], c[1]], 14);
           })
           .catch(function () {
-            addrList.innerHTML =
-              '<p style="padding:15px;color:var(--gray)">Ошибка поиска</p>';
+            addrList.innerHTML = "";
+            if (errEl) {
+              errEl.textContent = "Ошибка поиска. Попробуйте позже.";
+              errEl.classList.add("active");
+            }
           });
       }
       function goToBench(id) {
@@ -1424,6 +2051,8 @@
       function searchBenches() {
         clearTimeout(searchTimeout);
         searchTimeout = setTimeout(function () {
+          var errEl = document.getElementById("searchError");
+          if (errEl) errEl.classList.remove("active");
           var q = document.getElementById("searchInput").value.trim();
           if (!q || q.length < 2) {
             document
@@ -1485,7 +2114,8 @@
             "</span>";
           d.onclick = function () {
             l.classList.remove("active");
-            myMap.setCenter([r.bench.latitude, r.bench.longitude], 17);
+            if (myMap)
+              myMap.setCenter([r.bench.latitude, r.bench.longitude], 17);
             showBenchCard(r.bench);
           };
           l.appendChild(d);
@@ -1508,9 +2138,7 @@
         var o = document.createElement("div");
         o.className = "overlay-modal";
         o.innerHTML =
-          '<img src="' +
-          u +
-          '" style="max-width:95%;border-radius:10px">';
+          '<img src="' + u + '" style="max-width:95%;border-radius:10px">';
         o.addEventListener("click", function (e) {
           if (e.target === o) o.remove();
         });
@@ -1526,8 +2154,48 @@
           return;
         }
         document.getElementById("addModalContent").innerHTML =
-          '<div class="form-group"><label>Фото (обязательно!)</label><input type="file" id="modalPhotoInput" accept="image/*" capture="environment" multiple></div><div id="photoPreview" style="display:flex;gap:10px;flex-wrap:wrap"></div><div class="form-group"><label>Описание</label><textarea id="modalBenchDesc" rows="3"></textarea></div><button class="btn" onclick="saveBench()">Сохранить</button>';
+          '<div class="form-group"><label>Фото (обязательно!)</label><input type="file" id="modalPhotoInput" accept="image/*" capture="environment" multiple></div><div id="photoPreview" style="display:flex;gap:10px;flex-wrap:wrap"></div><div class="form-group"><label>Описание</label><textarea id="modalBenchDesc" rows="3"></textarea></div><div class="form-group" style="text-align:center"><i class="fa-solid fa-map-pin" style="color:var(--primary);font-size:1.5em"></i><div id="benchCoords" style="font-size:12px;color:var(--gray);margin-top:5px">Координаты: загружаются...</div></div><button class="btn" onclick="saveBench()">Сохранить</button>';
         document.getElementById("addModal").classList.add("active");
+        // Show draggable marker overlay on the map
+        if (myMap) {
+          if (dragPlacemark) myMap.geoObjects.remove(dragPlacemark);
+          dragPlacemark = new ymaps.Placemark(
+            [userPosition.lat, userPosition.lng],
+            {},
+            {
+              draggable: true,
+              iconLayout: "default#image",
+              iconImageHref:
+                "data:image/svg+xml;base64," +
+                btoa(
+                  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><path d="M32 2 C18 14 8 26 8 40 C8 53 18 62 32 62 C46 62 56 53 56 40 C56 26 46 14 32 2 Z" fill="#5b75f8" stroke="white" stroke-width="2"/><circle cx="32" cy="38" r="13" fill="white"/><circle cx="32" cy="38" r="7" fill="#5b75f8"/></svg>',
+                ),
+              iconImageSize: [45, 45],
+              iconImageOffset: [-22, -45],
+            },
+          );
+          myMap.geoObjects.add(dragPlacemark);
+          myMap.setCenter([userPosition.lat, userPosition.lng], 16);
+          var coordsEl = document.getElementById("benchCoords");
+          if (coordsEl) {
+            coordsEl.textContent =
+              "Координаты: " +
+              userPosition.lat.toFixed(5) +
+              ", " +
+              userPosition.lng.toFixed(5);
+          }
+          dragPlacemark.events.add("dragend", function () {
+            var c = dragPlacemark.geometry.getCoordinates();
+            userPosition.lat = c[0];
+            userPosition.lng = c[1];
+            if (coordsEl) {
+              coordsEl.textContent =
+                "Координаты: " + c[0].toFixed(5) + ", " + c[1].toFixed(5);
+            }
+          });
+        }
+        var overlay = document.getElementById("markerDragOverlay");
+        if (overlay) overlay.style.display = "flex";
         document
           .getElementById("modalPhotoInput")
           .addEventListener("change", function (e) {
@@ -1665,9 +2333,11 @@
             var h = "";
             d.users.forEach(function (u, i) {
               h +=
-                '<div class="search-result-item"><span>' +
+                '<div class="search-result-item"><span style="display:flex;align-items:center;gap:6px">' +
                 (i + 1) +
-                '</span><span class="name">' +
+                "</span>" +
+                avatarHtml(u.avatar, u.nickname, "sm") +
+                '<span class="name" style="margin-left:4px">' +
                 escapeHtml(u.nickname) +
                 '</span><span class="dist">⭐' +
                 u.reputation +
@@ -1682,12 +2352,42 @@
           showToast("Войдите");
           return;
         }
+        // Fetch full profile (phone, email, avatar) from server
+        fetch("/api/user/" + currentUser.id, {
+          headers: authHeaders(),
+        })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (d) {
+            if (d.success && d.user) {
+              currentUser.avatar = d.user.avatar || currentUser.avatar;
+              currentUser.phone = d.user.phone || "";
+              currentUser.email = d.user.email || "";
+              // Update localStorage
+              localStorage.setItem("tver_user", JSON.stringify(currentUser));
+            }
+            renderProfile();
+          })
+          .catch(function () {
+            renderProfile();
+          });
+      }
+      function renderProfile() {
         var h =
-          '<div style="display:flex;align-items:center;gap:15px;margin-bottom:20px"><div style="width:60px;height:60px;border-radius:50%;background:var(--primary);display:flex;align-items:center;justify-content:center;font-size:2em;color:#fff">' +
-          (currentUser.nickname
-            ? currentUser.nickname.charAt(0).toUpperCase()
-            : "?") +
-          '</div><div><div style="font-weight:700">' +
+          '<div style="display:flex;align-items:center;gap:15px;margin-bottom:20px">' +
+          (currentUser.avatar
+            ? '<img src="' +
+              (currentUser.avatar.indexOf("/") === 0
+                ? window.location.origin + currentUser.avatar
+                : currentUser.avatar) +
+              '" class="avatar" style="width:60px;height:60px;border:2px solid var(--card)" alt="avatar">'
+            : '<div class="avatar-default" style="width:60px;height:60px;font-size:1.8em">' +
+              (currentUser.nickname
+                ? currentUser.nickname.charAt(0).toUpperCase()
+                : "?") +
+              "</div>") +
+          '<div><div style="font-weight:700">' +
           escapeHtml(currentUser.nickname) +
           '</div><div style="color:var(--gray)">@' +
           escapeHtml(currentUser.login) +
@@ -1696,6 +2396,21 @@
           '<div style="display:flex;gap:10px;margin-bottom:20px"><div class="profile-stat"><div class="v">' +
           (currentUser.reputation || 0) +
           '</div><div style="color:var(--gray)">Репутация</div></div></div>';
+        h += '<div class="section-title">Контакты</div>';
+        h +=
+          '<div style="background:var(--soft);border-radius:12px;padding:12px;margin-bottom:10px;font-size:13px"><div><b>Телефон:</b> <span id="userPhone">' +
+          escapeHtml(currentUser.phone || "—") +
+          '</span></div><div><b>Email:</b> <span id="userEmail">' +
+          escapeHtml(currentUser.email || "—") +
+          "</span></div></div>";
+        h +=
+          '<button class="btn" style="margin-bottom:15px" onclick="openEditProfile()">Редактировать профиль</button>';
+        // Уведомления пользователя
+        h +=
+          '<div class="section-title">Уведомления</div><div id="userNotifBox" style="max-height:150px;overflow-y:auto;-webkit-overflow-scrolling:touch">Загрузка...</div>';
+        // Кнопка очистки уведомлений
+        h +=
+          '<button class="btn" style="margin-top:8px;background:var(--input-bg);color:var(--gray)" onclick="clearUserNotifications()">Очистить уведомления</button>';
         h +=
           '<div class="section-title">Достижения</div><div id="badgesBox">Загрузка...</div>';
         h +=
@@ -1748,9 +2463,15 @@
                       return (
                         '<div class="search-result-item"><span>' +
                         st +
-                        '</span><span class="name">' +
+                        '</span><div style="display:flex;flex-direction:column"><span class="name">' +
                         escapeHtml(b.description || "Скамейка") +
-                        "</span></div>"
+                        "</span>" +
+                        (b.admin_comment
+                          ? '<span style="color:var(--gray);font-size:11px;margin-top:2px"><i class="fa-solid fa-comment-dots"></i>' +
+                            escapeHtml(b.admin_comment) +
+                            "</span>"
+                          : "") +
+                        "</div></div>"
                       );
                     })
                     .join("")
@@ -1801,12 +2522,14 @@
                         ph += "</div>";
                       }
                       return (
-                        '<div class="review-item"><b>' +
+                        '<div class="review-item" style="display:flex;align-items:flex-start;gap:8px">' +
+                        avatarHtml(r.reviewer_avatar, r.reviewer, "sm") +
+                        "<div><b>" +
                         escapeHtml(r.reviewer || "Аноним") +
                         "</b>: " +
                         escapeHtml(r.comment || "") +
                         ph +
-                        "</div>"
+                        "</div></div>"
                       );
                     })
                     .join("")
@@ -1870,6 +2593,285 @@
             } else {
               mr.innerHTML = '<p style="color:var(--gray)">Нет жалоб</p>';
             }
+          });
+        // Загрузка уведомлений пользователя
+        loadUserNotifications();
+      }
+      // openEditProfile(): открывает форму редактирования профиля (ник, телефон,
+      // email, загрузка аватара) во всплывающем overlay-окне.
+      function openEditProfile() {
+        var o = document.createElement("div");
+        o.className = "overlay-modal";
+        var avatarPreview = currentUser.avatar
+          ? '<img src="' +
+            (currentUser.avatar.indexOf("/") === 0
+              ? window.location.origin + currentUser.avatar
+              : currentUser.avatar) +
+            '" class="avatar" style="width:60px;height:60px;display:block;margin:0 auto 10px;border:2px solid var(--card)" alt="avatar">'
+          : "";
+        o.innerHTML =
+          '<div class="overlay-box" style="position:relative"><div class="modal-header" style="padding:0;margin-bottom:15px"><h3 style="margin:0">Редактировать профиль</h3><button class="close-btn" style="position:absolute;top:0;right:0" onclick="closeOverlay(this)">✕</button></div>' +
+          avatarPreview +
+          '<div class="form-group" style="text-align:center"><label style="display:block;margin-bottom:5px">Аватар (новый)</label><input type="file" id="editAvatarInput" accept="image/*" style="width:100%"></div>' +
+          '<div class="form-group" style="text-align:left"><label>Никнейм</label><input type="text" id="editNickname" value="' +
+          escapeHtml(currentUser.nickname || "") +
+          '" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)"></div>' +
+          '<div class="form-group" style="text-align:left"><label>Телефон</label><input type="tel" id="editPhone" value="' +
+          escapeHtml(currentUser.phone || "") +
+          '" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)"></div>' +
+          '<div class="form-group" style="text-align:left"><label>Email</label><input type="email" id="editEmail" value="' +
+          escapeHtml(currentUser.email || "") +
+          '" style="width:100%;padding:10px;border-radius:8px;border:1px solid var(--border);background:var(--input-bg);color:var(--text)"></div>' +
+          '<button class="btn" onclick="saveProfile()">Сохранить</button></div>';
+        o.addEventListener("click", function (e) {
+          if (e.target === o) o.remove();
+        });
+        document.body.appendChild(o);
+      }
+      // saveProfile(): отправляет изменения профиля на сервер
+      function saveProfile() {
+        var nick = document.getElementById("editNickname").value.trim();
+        var phone = document.getElementById("editPhone").value.trim();
+        var email = document.getElementById("editEmail").value.trim();
+        if (!nick) {
+          showToast("Введите никнейм");
+          return;
+        }
+        if (containsBadWords(nick)) {
+          showOverlay("fa-xmark", "#e74c3c", "Ошибка", "Мат в никнейме!");
+          return;
+        }
+        var fd = new FormData();
+        fd.append("nickname", nick);
+        fd.append("phone", phone);
+        fd.append("email", email);
+        var avatarFile = document.getElementById("editAvatarInput").files;
+        if (avatarFile.length) {
+          fd.append("avatar", avatarFile[0]);
+        }
+        // Сначала загружаем аватар (если выбран), потом обновляем профиль
+        var avatarUrl = currentUser.avatar;
+        if (avatarFile.length) {
+          uploadAvatar(fd)
+            .then(function () {
+              updateUser(nick, phone, email);
+            })
+            .catch(function () {
+              showOverlay(
+                "fa-xmark",
+                "#e74c3c",
+                "Ошибка",
+                "Не удалось загрузить аватар",
+              );
+            });
+        } else {
+          updateUser(nick, phone, email);
+        }
+        function updateUser(n, p, e) {
+          var form = new FormData();
+          form.append("nickname", n);
+          form.append("phone", p);
+          form.append("email", e);
+          fetch("/api/user/" + currentUser.id, {
+            method: "POST",
+            headers: authHeaders(),
+            body: form,
+          })
+            .then(function (r) {
+              return r.json();
+            })
+            .then(function (d) {
+              document.querySelectorAll(".overlay-modal").forEach(function (e) {
+                e.remove();
+              });
+              if (d.success) {
+                currentUser.nickname = n;
+                currentUser.phone = p;
+                currentUser.email = e;
+                localStorage.setItem("tver_user", JSON.stringify(currentUser));
+                showToast("Сохранено!");
+                // Refresh profile after short delay
+                setTimeout(function () {
+                  if (document.getElementById("profileContent")) {
+                    renderProfile();
+                  }
+                }, 300);
+              } else {
+                showToast(d.error || "Ошибка сохранения");
+              }
+            })
+            .catch(function () {
+              showToast("Ошибка соединения с сервером");
+            });
+        }
+      }
+      // uploadAvatar(): загружает аватар на сервер и возвращает URL
+      function uploadAvatar(fd) {
+        return fetch("/api/user/avatar", {
+          method: "POST",
+          headers: authHeaders(),
+          body: fd,
+        })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (d) {
+            if (d.success && d.avatar) {
+              currentUser.avatar = d.avatar;
+              localStorage.setItem("tver_user", JSON.stringify(currentUser));
+              return d.avatar;
+            }
+            throw new Error(d.error || "Upload failed");
+          });
+      }
+      function loadUserNotifications() {
+        if (!currentUser) return;
+        fetch("/api/user/" + currentUser.id + "/notifications", {
+          headers: authHeaders(),
+        })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (d) {
+            var box = document.getElementById("userNotifBox");
+            if (!box) return;
+            if (!d.notifications || !d.notifications.length) {
+              box.innerHTML =
+                '<p style="color:var(--gray)">Нет уведомлений</p>';
+              return;
+            }
+            box.innerHTML = d.notifications
+              .map(function (n) {
+                var cls = n.read
+                  ? ""
+                  : " style='background:#f0f4ff;border-radius:8px;padding:8px;margin:-8px -8px 8px -8px'";
+                return (
+                  '<div class="notif-item"' +
+                  cls +
+                  '><div class="notif-msg">' +
+                  escapeHtml(n.message) +
+                  "</div><div class='notif-time'>" +
+                  (n.created_at || "") +
+                  "</div></div>"
+                );
+              })
+              .join("");
+            // Обновляем бейджик колокна
+            var badge = document.getElementById("notifBadge");
+            if (badge) {
+              var unread = d.notifications.filter(function (n) {
+                return !n.read;
+              });
+              if (unread.length) {
+                badge.textContent = unread.length;
+                badge.style.display = "inline-block";
+              } else {
+                badge.style.display = "none";
+              }
+            }
+          });
+      }
+      function clearUserNotifications() {
+        if (!currentUser) return;
+        if (!confirm("Очистить прочитанные уведомления?")) return;
+        fetch("/api/user/" + currentUser.id + "/notifications/clear", {
+          method: "POST",
+          headers: authHeaders(),
+        })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (d) {
+            if (d.success) {
+              loadUserNotifications();
+              updateNotifBadge();
+            }
+          });
+      }
+      function updateNotifBadge() {
+        if (!currentUser) return;
+        fetch("/api/user/" + currentUser.id + "/notifications", {
+          headers: authHeaders(),
+        })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (d) {
+            var badge = document.getElementById("notifBadge");
+            if (!badge) return;
+            if (d.notifications) {
+              var unread = d.notifications.filter(function (n) {
+                return !n.read;
+              });
+              if (unread.length) {
+                badge.textContent = unread.length;
+                badge.style.display = "inline-block";
+              } else {
+                badge.style.display = "none";
+              }
+            }
+          });
+      }
+      function toggleNotifications() {
+        var panel = document.getElementById("notificationsPanel");
+        if (!panel) return;
+        if (panel.classList.contains("active")) {
+          panel.classList.remove("active");
+        } else {
+          if (!currentUser) {
+            showToast("Войдите");
+            return;
+          }
+          // Position panel relative to bell button
+          var bell = document.getElementById("notifBellBtn");
+          if (bell) {
+            var rect = bell.getBoundingClientRect();
+            panel.style.bottom = (window.innerHeight - rect.top + 12) + "px";
+            panel.style.right = (window.innerWidth - rect.right) + "px";
+          }
+          panel.classList.add("active");
+          loadNotificationsPanel();
+        }
+      }
+      function loadNotificationsPanel() {
+        if (!currentUser) return;
+        fetch("/api/user/" + currentUser.id + "/notifications", {
+          headers: authHeaders(),
+        })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (d) {
+            var list = document.getElementById("notifList");
+            if (!list) return;
+            if (!d.notifications || !d.notifications.length) {
+              list.innerHTML =
+                '<p style="color:var(--gray);padding:10px;text-align:center">Нет уведомлений</p>';
+              return;
+            }
+            d.notifications.forEach(function (n) {
+              n._read = true;
+            });
+            // Mark all as read
+            fetch("/api/user/" + currentUser.id + "/notifications/read", {
+              method: "POST",
+              headers: authHeaders(),
+            });
+            list.innerHTML = d.notifications
+              .map(function (n) {
+                return (
+                  '<div class="notif-item">' +
+                  '<div class="notif-msg">' +
+                  escapeHtml(n.message) +
+                  "</div>" +
+                  '<div class="notif-time">' +
+                  (n.created_at || "") +
+                  "</div></div>"
+                );
+              })
+              .join("");
+            var badge = document.getElementById("notifBadge");
+            if (badge) badge.style.display = "none";
           });
       }
       function removeReport(id, btn) {
@@ -1936,18 +2938,36 @@
         document.getElementById("authScreen").classList.remove("hidden");
         document.getElementById("mainApp").classList.remove("active");
         closeModal("profileModal");
+        // Скрываем колоконь уведомлений и панель
+        var badge = document.getElementById("notifBadge");
+        if (badge) badge.style.display = "none";
+        var panel = document.getElementById("notificationsPanel");
+        if (panel && panel.classList.contains("active"))
+          panel.classList.remove("active");
       }
       var initialViewportHeight = window.innerHeight;
       window.addEventListener("resize", function () {
         if (window.innerHeight < initialViewportHeight * 0.7) {
-          document.getElementById("authScreen").style.height = window.innerHeight + "px";
-          document.getElementById("mainApp").style.height = window.innerHeight + "px";
+          document.getElementById("authScreen").style.height =
+            window.innerHeight + "px";
+          document.getElementById("mainApp").style.height =
+            window.innerHeight + "px";
         } else {
           document.getElementById("authScreen").style.height = "";
           document.getElementById("mainApp").style.height = "";
         }
       });
       checkAuth();
+      // Инициализируем swipe-to-close для карточки скамейки
+      setTimeout(function () {
+        initBenchCardSwipe();
+      }, 500);
+      // Периодически обновляем бейджик уведомлений
+      setInterval(function () {
+        if (currentUser) {
+          updateNotifBadge();
+        }
+      }, 30000);
     </script>
   </body>
 </html>

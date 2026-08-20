@@ -11,7 +11,7 @@ bot.onText(/\/start/, (msg) => {
   const keyboard = {
     reply_markup: {
       keyboard: [
-        [{ text: "🪑 Открыть карту скамеек", web_app: { url: MINI_APP_URL } }],
+        [{ text: "Открыть карту скамеек", web_app: { url: MINI_APP_URL } }],
       ],
       resize_keyboard: true,
     },

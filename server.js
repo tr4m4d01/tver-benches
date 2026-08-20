@@ -1,300 +1,859 @@
+// ============================================================================
+//  server.js (D1) — «Скамейки Твери» on Cloudflare D1
+//  Optimized: retries + timeouts, batched queries, caching, error handling.
+// ============================================================================
+
+// ---- Libraries ------------------------------------------------------------
+require("dotenv").config();
 const express = require("express");
 const cors = require("cors");
 const path = require("path");
 const fs = require("fs");
 const multer = require("multer");
-const initSqlJs = require("sql.js");
 const crypto = require("crypto");
 
+// ---- Configuration --------------------------------------------------------
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Cloudflare D1 configuration (from environment variables)
+const D1_ACCOUNT_ID = process.env.D1_ACCOUNT_ID;
+const D1_DATABASE_ID = process.env.D1_DATABASE_ID;
+const D1_API_TOKEN = process.env.D1_API_TOKEN;
+
+// Reliability tuning
+const D1_RETRIES = 3; // retry attempts on transient failures
+const D1_RETRY_DELAY = 300; // base backoff (ms), exponential
+const D1_TIMEOUT = 10000; // per-request fetch timeout (ms)
+const CACHE_TTL = 30000; // stats / top-users cache TTL (ms)
+const SESSION_CACHE_TTL = 300000; // in-memory session cache (ms)
+
+if (!D1_ACCOUNT_ID || !D1_DATABASE_ID || !D1_API_TOKEN) {
+  console.error("❌ Missing required D1 environment variables:");
+  console.error("   D1_ACCOUNT_ID:", D1_ACCOUNT_ID ? "✓" : "✗");
+  console.error("   D1_DATABASE_ID:", D1_DATABASE_ID ? "✓" : "✗");
+  console.error("   D1_API_TOKEN:", D1_API_TOKEN ? "✗" : "✓");
+  process.exit(1);
+}
+
+const D1_ENDPOINT = `https://api.cloudflare.com/client/v4/accounts/${D1_ACCOUNT_ID}/d1/database/${D1_DATABASE_ID}/query`;
+
+// ---- Required directories -------------------------------------------------
 if (!fs.existsSync(__dirname + "/uploads"))
   fs.mkdirSync(__dirname + "/uploads");
 if (!fs.existsSync(__dirname + "/public")) fs.mkdirSync(__dirname + "/public");
 
-let db;
-const DB_FILE = "database.db";
-
-async function initDatabase() {
-  const SQL = await initSqlJs();
-  if (fs.existsSync(DB_FILE)) {
-    db = new SQL.Database(fs.readFileSync(DB_FILE));
-  } else {
-    db = new SQL.Database();
+// ============================================================================
+//  D1 Database Interface (with retry + timeout)
+// ============================================================================
+class D1SqlError extends Error {
+  constructor(m) {
+    super(m);
+    this.fatal = true;
   }
-  db.run(`
-         CREATE TABLE IF NOT EXISTS users (id INTEGER PRIMARY KEY AUTOINCREMENT, login TEXT UNIQUE, password TEXT, nickname TEXT, reputation INTEGER DEFAULT 0, total_benches INTEGER DEFAULT 0, total_reviews_received INTEGER DEFAULT 0, theme TEXT DEFAULT 'dark', is_admin INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP);
-        CREATE TABLE IF NOT EXISTS benches (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT DEFAULT 'Скамейка', description TEXT, latitude REAL, longitude REAL, user_id INTEGER, user_name TEXT, status TEXT DEFAULT 'pending', rating REAL DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP);
-        CREATE TABLE IF NOT EXISTS bench_photos (id INTEGER PRIMARY KEY AUTOINCREMENT, bench_id INTEGER, photo_url TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP);
-        CREATE TABLE IF NOT EXISTS bench_ratings (id INTEGER PRIMARY KEY AUTOINCREMENT, bench_id INTEGER, user_id INTEGER, rating INTEGER, comment TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP);
-        CREATE TABLE IF NOT EXISTS bench_favorites (id INTEGER PRIMARY KEY AUTOINCREMENT, bench_id INTEGER, user_id INTEGER, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, UNIQUE(bench_id, user_id));
-        CREATE TABLE IF NOT EXISTS bench_reports (id INTEGER PRIMARY KEY AUTOINCREMENT, bench_id INTEGER, user_id INTEGER, reason TEXT, status TEXT DEFAULT 'pending', admin_response TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP);
-        CREATE TABLE IF NOT EXISTS report_photos (id INTEGER PRIMARY KEY AUTOINCREMENT, report_id INTEGER, photo_url TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP);
-        CREATE TABLE IF NOT EXISTS review_photos (id INTEGER PRIMARY KEY AUTOINCREMENT, review_id INTEGER, photo_url TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP);
-         CREATE TABLE IF NOT EXISTS bench_likes (id INTEGER PRIMARY KEY AUTOINCREMENT, bench_id INTEGER, user_id INTEGER, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, UNIQUE(bench_id, user_id));
-         CREATE TABLE IF NOT EXISTS sessions (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, token TEXT UNIQUE, expires_at INTEGER, created_at DATETIME DEFAULT CURRENT_TIMESTAMP);
-        CREATE TABLE IF NOT EXISTS notifications (id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, message TEXT, type TEXT DEFAULT 'info', read INTEGER DEFAULT 0, created_at DATETIME DEFAULT CURRENT_TIMESTAMP);
-      `);
-  try {
-    var cols = db.exec("PRAGMA table_info(sessions)");
-    var hasExpires =
-      cols.length > 0 &&
-      cols[0].values.some(function (row) {
-        return row[1] === "expires_at";
-      });
-    if (!hasExpires) {
-      db.run("ALTER TABLE sessions ADD COLUMN expires_at INTEGER");
-    }
-  } catch (e) {}
-  try {
-    var userCols = db.exec("PRAGMA table_info(users)");
-    var hasAdmin =
-      userCols.length > 0 &&
-      userCols[0].values.some(function (row) {
-        return row[1] === "is_admin";
-      });
-    if (!hasAdmin) {
-      db.run("ALTER TABLE users ADD COLUMN is_admin INTEGER DEFAULT 0");
-    }
-  } catch (e) {}
-  saveDatabase();
 }
-
-function saveDatabase() {
-  if (db) fs.writeFileSync(DB_FILE, Buffer.from(db.export()));
-}
-function q(sql, params) {
-  var stmt = db.prepare(sql);
-  if (params) stmt.bind(params);
-  var results = [];
-  while (stmt.step()) {
-    results.push(stmt.getAsObject());
+class D1TransientError extends Error {
+  constructor(m) {
+    super(m);
+    this.fatal = false;
   }
-  stmt.free();
-  return results;
-}
-function run(sql, params) {
-  var stmt = db.prepare(sql);
-  if (params) stmt.bind(params);
-  stmt.step();
-  stmt.free();
-  saveDatabase();
 }
 
-var rateLimiter = new Map();
-var RATE_LIMIT_WINDOW = 60000;
-var RATE_LIMIT_MAX = 10;
+// Executes ONE SQL statement against D1 (no batching — D1 HTTP API runs a
+// single statement per call). Retries transient (network/timeout/5xx) errors.
+async function d1Query(sql, params = []) {
+  let lastErr;
+  for (let attempt = 0; attempt <= D1_RETRIES; attempt++) {
+    try {
+      const response = await fetch(D1_ENDPOINT, {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${D1_API_TOKEN}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ sql, params }),
+        signal: AbortSignal.timeout(D1_TIMEOUT),
+      });
 
-var SESSION_DURATION = 7 * 24 * 60 * 60 * 1000;
+      if (!response.ok) {
+        // 4xx from Cloudflare usually means auth/quota — still retry a couple times
+        throw new D1TransientError(
+          `HTTP ${response.status} ${response.statusText}`,
+        );
+      }
 
-function hashPassword(password) {
-  var salt = crypto.randomBytes(16).toString("hex");
-  var hash = crypto.scryptSync(password, salt, 64).toString("hex");
-  return salt + ":" + hash;
+      let data;
+      try {
+        data = await response.json();
+      } catch (e) {
+        throw new D1TransientError("Invalid JSON from D1 API");
+      }
+
+      if (data.errors && data.errors.length > 0) {
+        const msg = data.errors[0]?.message || "Unknown D1 error";
+        throw new D1SqlError(`D1 error: ${msg}`);
+      }
+      if (!data.result || data.result.length === 0) return [];
+
+      const result = data.result[0];
+      if (result.error) throw new D1SqlError(`D1 error: ${result.error}`);
+
+      return result.results || [];
+    } catch (err) {
+      lastErr = err;
+      if (err.fatal) throw err; // SQL/constraint errors — never retry
+      if (attempt < D1_RETRIES) {
+        const backoff = D1_RETRY_DELAY * Math.pow(2, attempt);
+        await new Promise((r) => setTimeout(r, backoff));
+        continue;
+      }
+      throw err;
+    }
+  }
+  throw lastErr || new D1TransientError("D1 query failed");
 }
-function verifyPassword(password, stored) {
-  if (!stored) return false;
-  var parts = stored.split(":");
-  if (parts.length !== 2) return password === stored;
-  var salt = parts[0];
-  var hash = parts[1];
-  var testHash = crypto.scryptSync(password, salt, 64).toString("hex");
-  return testHash === hash;
+
+// Wrapper for write operations (no returned rows needed)
+async function d1Run(sql, params = []) {
+  await d1Query(sql, params);
 }
+
+// Run an array of SQL statements one-by-one (D1 has no batch execution)
+async function execMultiple(statements) {
+  for (const stmt of statements) {
+    await d1Run(stmt);
+  }
+}
+
+// Resolve last inserted row id with a safe fallback for the stateless API
+async function d1LastInsertRowid(tableName = "benches") {
+  try {
+    const rows = await d1Query("SELECT last_insert_rowid() as id");
+    if (rows.length && rows[0].id !== undefined && rows[0].id !== null) {
+      return rows[0].id;
+    }
+  } catch (e) {
+    console.warn("last_insert_rowid failed:", e.message);
+  }
+  try {
+    const rows = await d1Query(`SELECT MAX(id) as id FROM ${tableName}`);
+    return rows.length ? rows[0].id : null;
+  } catch (e) {
+    console.warn(`MAX(id) failed for ${tableName}:`, e.message);
+    return null;
+  }
+}
+
+// Thin aliases used across the codebase
+async function q(sql, params) {
+  return d1Query(sql, params);
+}
+async function run(sql, params) {
+  return d1Run(sql, params);
+}
+
+// ============================================================================
+//  In-memory caches
+// ============================================================================
+const responseCache = new Map();
+function getCache(key) {
+  const item = responseCache.get(key);
+  if (item && Date.now() - item.t < CACHE_TTL) return item.v;
+  if (item) responseCache.delete(key);
+  return null;
+}
+function setCache(key, v) {
+  responseCache.set(key, { v, t: Date.now() });
+}
+
+const sessionCache = new Map(); // token -> { userId, expiresAt, cachedAt }
+
+async function getSessionUser(token) {
+  const cached = sessionCache.get(token);
+  if (
+    cached &&
+    cached.expiresAt > Date.now() &&
+    Date.now() - cached.cachedAt < SESSION_CACHE_TTL
+  ) {
+    return cached.userId;
+  }
+  const rows = await q(
+    "SELECT user_id, expires_at FROM sessions WHERE token=?",
+    [token],
+  );
+  if (!rows.length) {
+    sessionCache.delete(token);
+    return null;
+  }
+  if (rows[0].expires_at && Date.now() > rows[0].expires_at) {
+    await run("DELETE FROM sessions WHERE token=?", [token]).catch(() => {});
+    sessionCache.delete(token);
+    return null;
+  }
+  sessionCache.set(token, {
+    userId: rows[0].user_id,
+    expiresAt: rows[0].expires_at,
+    cachedAt: Date.now(),
+  });
+  return rows[0].user_id;
+}
+
+// ============================================================================
+//  Batch helpers (eliminate N+1 API calls)
+// ============================================================================
+
+// Attach photo arrays to a list of parent rows in a single query.
+async function attachPhotos(rows, idField, table, refField) {
+  if (!rows.length) return rows;
+  const ids = rows.map((r) => r[idField]);
+  const ph = ids.map(() => "?").join(",");
+  const photos = await q(
+    `SELECT id, photo_url, ${refField} as ref FROM ${table} WHERE ${refField} IN (${ph})`,
+    ids,
+  );
+  const map = {};
+  photos.forEach((p) => {
+    (map[p.ref] ||= []).push({ id: p.id, photo_url: p.photo_url });
+  });
+  return rows.map((r) =>
+    Object.assign({}, r, { photos: map[r[idField]] || [] }),
+  );
+}
+
+// Enrich a list of benches with photos / likes / liked / favorited in 4 queries.
+async function enrichBenches(benches, uid) {
+  if (!benches.length) return [];
+  const ids = benches.map((b) => b.id);
+  const ph = ids.map(() => "?").join(",");
+
+  const [photos, likes, liked, favs] = await Promise.all([
+    q(
+      `SELECT id, bench_id, photo_url FROM bench_photos WHERE bench_id IN (${ph})`,
+      ids,
+    ),
+    q(
+      `SELECT bench_id, COUNT(*) as count FROM bench_likes WHERE bench_id IN (${ph}) GROUP BY bench_id`,
+      ids,
+    ),
+    uid
+      ? q(
+          `SELECT bench_id FROM bench_likes WHERE bench_id IN (${ph}) AND user_id=?`,
+          [...ids, uid],
+        )
+      : Promise.resolve([]),
+    uid
+      ? q(
+          `SELECT bench_id FROM bench_favorites WHERE bench_id IN (${ph}) AND user_id=?`,
+          [...ids, uid],
+        )
+      : Promise.resolve([]),
+  ]);
+
+  const photosMap = {};
+  photos.forEach((p) => {
+    (photosMap[p.bench_id] ||= []).push({ id: p.id, photo_url: p.photo_url });
+  });
+  const likesMap = {};
+  likes.forEach((l) => {
+    likesMap[l.bench_id] = l.count;
+  });
+  const likedSet = new Set(liked.map((r) => r.bench_id));
+  const favSet = new Set(favs.map((r) => r.bench_id));
+
+  return benches.map((b) => ({
+    ...b,
+    photos: photosMap[b.id] || [],
+    likes: likesMap[b.id] || 0,
+    liked: likedSet.has(b.id),
+    favorited: favSet.has(b.id),
+  }));
+}
+
+// ============================================================================
+//  Rate limiting
+// ============================================================================
+const rateLimiter = new Map();
+const RATE_LIMIT_WINDOW = 60000;
+const RATE_LIMIT_MAX = 10;
 
 function checkRateLimit(key) {
-  var now = Date.now();
-  var entries = rateLimiter.get(key) || [];
-  entries = entries.filter(function (t) {
-    return now - t < RATE_LIMIT_WINDOW;
-  });
+  const now = Date.now();
+  let entries = rateLimiter.get(key) || [];
+  entries = entries.filter((t) => now - t < RATE_LIMIT_WINDOW);
   entries.push(now);
   rateLimiter.set(key, entries);
   return entries.length <= RATE_LIMIT_MAX;
 }
 
+// ============================================================================
+//  Password hashing
+// ============================================================================
+const SESSION_DURATION = 7 * 24 * 60 * 60 * 1000;
+
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString("hex");
+  const hash = crypto.scryptSync(password, salt, 64).toString("hex");
+  return `${salt}:${hash}`;
+}
+
+function verifyPassword(password, stored) {
+  if (!stored) return false;
+  const parts = stored.split(":");
+  if (parts.length !== 2) return password === stored;
+  const [salt, hash] = parts;
+  const testHash = crypto.scryptSync(password, salt, 64).toString("hex");
+  return testHash === hash;
+}
+
+// ============================================================================
+//  Authentication middleware
+// ============================================================================
 function requireAuth(req, res, next) {
-  var token = req.headers.authorization || "";
-  if (token.startsWith("Bearer ")) {
-    token = token.substring(7);
-  } else {
-    token = req.body.token || req.query.token || "";
-  }
-  if (!token) {
+  let token = req.headers.authorization || "";
+  if (token.startsWith("Bearer ")) token = token.substring(7);
+  else token = (req.body && req.body.token) || req.query.token || "";
+
+  if (!token)
     return res.json({ success: false, error: "Требуется авторизация" });
-  }
-  var session = q("SELECT user_id, expires_at FROM sessions WHERE token=?", [
-    token,
-  ]);
-  if (!session.length) {
-    return res.json({ success: false, error: "Сессия истекла" });
-  }
-  if (session[0].expires_at && Date.now() > session[0].expires_at) {
-    run("DELETE FROM sessions WHERE token=?", [token]);
-    return res.json({ success: false, error: "Сессия истекла" });
-  }
-  req.user_id = session[0].user_id;
-  next();
+
+  getSessionUser(token)
+    .then((uid) => {
+      if (!uid) return res.json({ success: false, error: "Сессия истекла" });
+      req.user_id = uid;
+      next();
+    })
+    .catch((err) => {
+      console.error("Ошибка аутентификации:", err.message);
+      res.json({ success: false, error: "Ошибка сервера" });
+    });
 }
 
 function requireAdmin(req, res, next) {
-  requireAuth(req, res, function () {
-    var user = q("SELECT is_admin FROM users WHERE id=?", [req.user_id]);
-    if (!user.length || !user[0].is_admin) {
-      return res.json({ success: false, error: "Доступ запрещен" });
+  requireAuth(req, res, async function () {
+    try {
+      const user = await q("SELECT is_admin FROM users WHERE id=?", [
+        req.user_id,
+      ]);
+      if (!user.length || !user[0].is_admin) {
+        return res.json({ success: false, error: "Доступ запрещён" });
+      }
+      next();
+    } catch (err) {
+      console.error("Ошибка проверки админа:", err.message);
+      res.json({ success: false, error: "Ошибка сервера" });
     }
-    next();
   });
 }
 
+// ============================================================================
+//  Express middleware
+// ============================================================================
 app.use(cors());
 app.use(express.json({ limit: "50mb" }));
 app.use("/uploads", express.static(__dirname + "/uploads"));
 app.use(express.static(__dirname + "/public"));
 
 const storage = multer.diskStorage({
-  destination: function (req, file, cb) {
-    cb(null, __dirname + "/uploads/");
-  },
-  filename: function (req, file, cb) {
+  destination: (req, file, cb) => cb(null, __dirname + "/uploads/"),
+  filename: (req, file, cb) =>
     cb(
       null,
       Date.now() +
         "-" +
         Math.round(Math.random() * 1e9) +
         path.extname(file.originalname),
-    );
-  },
+    ),
 });
-const upload = multer({
-  storage: storage,
-  limits: { fileSize: 10 * 1024 * 1024 },
-});
+const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
 
-app.post("/api/register", function (req, res) {
-  var ip = req.ip || req.socket.remoteAddress || "unknown";
-  if (!checkRateLimit("register:" + ip)) {
+// ============================================================================
+//  Database initialization (each CREATE TABLE is a separate D1 call)
+// ============================================================================
+async function initDatabase() {
+  console.log("Инициализация базы данных D1...");
+
+  const createTables = [
+    `CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      login TEXT UNIQUE, password TEXT, nickname TEXT,
+      reputation INTEGER DEFAULT 0, total_benches INTEGER DEFAULT 0,
+      total_reviews_received INTEGER DEFAULT 0, theme TEXT DEFAULT 'dark',
+      is_admin INTEGER DEFAULT 0, avatar TEXT, phone TEXT, email TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP )`,
+    `CREATE TABLE IF NOT EXISTS benches (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT DEFAULT 'Скамейка',
+      description TEXT, latitude REAL, longitude REAL, user_id INTEGER,
+      user_name TEXT, status TEXT DEFAULT 'pending', rating REAL DEFAULT 0,
+      admin_comment TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP )`,
+    `CREATE TABLE IF NOT EXISTS bench_photos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, bench_id INTEGER, photo_url TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP )`,
+    `CREATE TABLE IF NOT EXISTS bench_ratings (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, bench_id INTEGER, user_id INTEGER,
+      rating INTEGER, comment TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP )`,
+    `CREATE TABLE IF NOT EXISTS bench_favorites (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, bench_id INTEGER, user_id INTEGER,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP, UNIQUE(bench_id, user_id) )`,
+    `CREATE TABLE IF NOT EXISTS bench_reports (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, bench_id INTEGER, user_id INTEGER,
+      reason TEXT, status TEXT DEFAULT 'pending', admin_response TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP )`,
+    `CREATE TABLE IF NOT EXISTS report_photos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, report_id INTEGER, photo_url TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP )`,
+    `CREATE TABLE IF NOT EXISTS review_photos (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, review_id INTEGER, photo_url TEXT,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP )`,
+    `CREATE TABLE IF NOT EXISTS bench_likes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, bench_id INTEGER, user_id INTEGER,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP, UNIQUE(bench_id, user_id) )`,
+    `CREATE TABLE IF NOT EXISTS sessions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, token TEXT UNIQUE,
+      expires_at INTEGER, created_at DATETIME DEFAULT CURRENT_TIMESTAMP )`,
+  `CREATE TABLE IF NOT EXISTS notifications (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, message TEXT,
+      type TEXT DEFAULT 'info', read INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP )`,
+  `CREATE TABLE IF NOT EXISTS user_notice (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, message TEXT,
+      type TEXT DEFAULT 'info', read INTEGER DEFAULT 0, related_id INTEGER,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP )`,
+  `CREATE TABLE IF NOT EXISTS review_reports (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, review_id INTEGER, user_id INTEGER,
+      reason TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP )`,
+];
+
+   await execMultiple(createTables);
+   console.log("База данных инициализирована");
+
+   const cols = await q(`PRAGMA table_info(notifications)`);
+   const hasCol = cols.some((c) => c.name === "related_id");
+   if (!hasCol) {
+     await run(`ALTER TABLE notifications ADD COLUMN related_id INTEGER DEFAULT NULL`);
+     console.log("Добавлена колонка related_id в notifications");
+   }
+
+   const ucols = await q(`PRAGMA table_info(users)`);
+   if (!ucols.some((c) => c.name === "banned")) {
+     await run(`ALTER TABLE users ADD COLUMN banned INTEGER DEFAULT 0`);
+     console.log("Добавлена колонка banned в users");
+   }
+   if (!ucols.some((c) => c.name === "ban_reason")) {
+     await run(`ALTER TABLE users ADD COLUMN ban_reason TEXT DEFAULT NULL`);
+     console.log("Добавлена колонка ban_reason в users");
+   }
+ }
+
+// ============================================================================
+//  Notification helpers
+// ============================================================================
+async function createNotification(userId, message, type, relatedId = null) {
+   try {
+     if (type === "admin") {
+       await run(
+         "INSERT INTO notifications(user_id, message, type, related_id) VALUES (NULL, ?, ?, ?)",
+         [message, type || "info", relatedId],
+       );
+     } else if (userId) {
+       await run(
+         "INSERT INTO notifications(user_id, message, type, related_id) VALUES (?, ?, ?, ?)",
+         [userId, message, type || "info", relatedId],
+       );
+     } else {
+       await run("INSERT INTO notifications(message, type, related_id) VALUES (?, ?, ?)",
+         [message, type || "info", relatedId],
+       );
+     }
+   } catch (err) {
+     console.error("Ошибка создания уведомления:", err.message);
+   }
+ }
+
+async function createUserNotice(userId, message, type, relatedId) {
+  try {
+    await run(
+      "INSERT INTO user_notice(user_id, message, type, related_id) VALUES (?, ?, ?, ?)",
+      [userId, message, type || "info", relatedId || null],
+    );
+  } catch (err) {
+    console.error("Ошибка создания персонального уведомления:", err.message);
+  }
+}
+
+// ============================================================================
+//  API Endpoints
+// ============================================================================
+
+// POST /api/register
+app.post("/api/register", async (req, res) => {
+  const ip = req.ip || req.socket.remoteAddress || "unknown";
+  if (!checkRateLimit("register:" + ip))
     return res.json({
       success: false,
       error: "Слишком много попыток. Подождите минуту.",
     });
-  }
-  var l = req.body.login,
+
+  const l = req.body.login,
     n = req.body.nickname,
     p = req.body.password;
   if (!l || !p || !n)
     return res.json({ success: false, error: "Все поля обязательны" });
-  var existingLogin = q("SELECT id FROM users WHERE login=?", [l]);
-  if (existingLogin.length)
-    return res.json({ success: false, error: "Логин занят" });
-  var existingNick = q("SELECT id FROM users WHERE nickname=?", [n]);
-  if (existingNick.length)
-    return res.json({ success: false, error: "Никнейм занят" });
-  run("INSERT INTO users(login,password,nickname)VALUES(?,?,?)", [
-    l,
-    hashPassword(p),
-    n,
-  ]);
-  res.json({ success: true });
+
+  try {
+    if ((await q("SELECT id FROM users WHERE login=?", [l])).length)
+      return res.json({ success: false, error: "Логин занят" });
+    if ((await q("SELECT id FROM users WHERE nickname=?", [n])).length)
+      return res.json({ success: false, error: "Никнейм занят" });
+
+    await run("INSERT INTO users(login,password,nickname) VALUES (?,?,?)", [
+      l,
+      hashPassword(p),
+      n,
+    ]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Ошибка регистрации:", err.message);
+    res.json({ success: false, error: "Ошибка сервера" });
+  }
 });
 
-app.post("/api/login", function (req, res) {
-  var ip = req.ip || req.socket.remoteAddress || "unknown";
-  if (!checkRateLimit("login:" + ip)) {
+// POST /api/login
+app.post("/api/login", async (req, res) => {
+  const ip = req.ip || req.socket.remoteAddress || "unknown";
+  if (!checkRateLimit("login:" + ip))
     return res.json({
       success: false,
       error: "Слишком много попыток. Подождите минуту.",
     });
-  }
-  var l = req.body.login,
+
+  const l = req.body.login,
     p = req.body.password;
-  var users = q(
-    "SELECT id,login,nickname,reputation,total_benches,theme,password FROM users WHERE login=?",
-    [l],
-  );
-  var loginOk = false;
-  if (users.length) {
-    if (verifyPassword(p, users[0].password)) {
+  try {
+    const users = await q(
+      "SELECT id,login,nickname,reputation,total_benches,theme,avatar,password FROM users WHERE login=?",
+      [l],
+    );
+    let loginOk = false;
+    if (users.length && verifyPassword(p, users[0].password)) {
       loginOk = true;
       delete users[0].password;
     }
-  }
-  if (loginOk) {
-    var token = crypto.randomBytes(32).toString("hex");
-    var expiresAt = Date.now() + SESSION_DURATION;
-    run("INSERT INTO sessions(user_id,token,expires_at)VALUES(?,?,?)", [
-      users[0].id,
-      token,
-      expiresAt,
-    ]);
-    res.json({ success: true, user: users[0], token: token });
-  } else {
-    res.json({ success: false, error: "Неверные данные" });
-  }
-});
-
-app.get("/api/benches", function (req, res) {
-  var uid = req.user_id || req.query.user_id;
-  var benches = q(
-    "SELECT * FROM benches WHERE status='active' ORDER BY created_at DESC",
-  );
-  var withPhotos = benches.map(function (b) {
-    var photos = q("SELECT id,photo_url FROM bench_photos WHERE bench_id=?", [
-      b.id,
-    ]);
-    var likes = q(
-      "SELECT COUNT(*) as count FROM bench_likes WHERE bench_id=?",
-      [b.id],
-    );
-    var liked = false;
-    var favorited = false;
-    if (uid) {
-      var likedRows = q(
-        "SELECT id FROM bench_likes WHERE bench_id=? AND user_id=?",
-        [b.id, uid],
+    if (loginOk) {
+      const token = crypto.randomBytes(32).toString("hex");
+      const expiresAt = Date.now() + SESSION_DURATION;
+      await run(
+        "INSERT INTO sessions(user_id,token,expires_at) VALUES (?,?,?)",
+        [users[0].id, token, expiresAt],
       );
-      liked = likedRows.length > 0;
-      var favRows = q(
-        "SELECT id FROM bench_favorites WHERE bench_id=? AND user_id=?",
-        [b.id, uid],
-      );
-      favorited = favRows.length > 0;
+      res.json({ success: true, user: users[0], token });
+    } else {
+      res.json({ success: false, error: "Неверные данные" });
     }
-    return Object.assign({}, b, {
-      photos: photos,
-      likes: likes.length ? likes[0].count : 0,
-      liked: liked,
-      favorited: favorited,
-    });
-  });
-  res.json({ success: true, benches: withPhotos });
+  } catch (err) {
+    console.error("Ошибка входа:", err.message);
+    res.json({ success: false, error: "Ошибка сервера" });
+  }
 });
 
+// POST /api/user/avatar
+app.post(
+  "/api/user/avatar",
+  requireAuth,
+  upload.single("avatar"),
+  async (req, res) => {
+    if (!req.file)
+      return res.json({ success: false, error: "Файл не загружен" });
+    const avatarUrl = "/uploads/" + req.file.filename;
+    try {
+      await run("UPDATE users SET avatar=? WHERE id=?", [
+        avatarUrl,
+        req.user_id,
+      ]);
+      res.json({ success: true, avatar: avatarUrl });
+    } catch (err) {
+      console.error("Ошибка загрузки аватара:", err.message);
+      res.json({ success: false, error: "Ошибка сервера" });
+    }
+  },
+);
+
+// GET /api/user/:id
+app.get("/api/user/:id", async (req, res) => {
+  const uid = parseInt(req.params.id);
+  try {
+    const user = await q(
+      "SELECT id,login,nickname,reputation,total_benches,total_reviews_received,theme,is_admin,avatar,phone,email,created_at FROM users WHERE id=?",
+      [uid],
+    );
+    if (!user.length)
+      return res.json({ success: false, error: "Пользователь не найден" });
+    const u = Object.assign({}, user[0]);
+    if (uid === req.user_id) {
+      u.phone = user[0].phone || "";
+      u.email = user[0].email || "";
+    }
+    res.json({ success: true, user: u });
+  } catch (err) {
+    console.error("Ошибка получения пользователя:", err.message);
+    res.json({ success: false, error: "Ошибка сервера" });
+  }
+});
+
+// POST /api/user/:id
+app.post("/api/user/:id", requireAuth, upload.none(), async (req, res) => {
+  const uid = parseInt(req.params.id);
+  if (uid !== req.user_id)
+    return res.json({ success: false, error: "Доступ запрещён" });
+
+  const fields = [],
+    params = [];
+  if (req.body.nickname !== undefined) {
+    if (
+      (
+        await q("SELECT id FROM users WHERE nickname=? AND id!=?", [
+          req.body.nickname,
+          uid,
+        ])
+      ).length
+    )
+      return res.json({ success: false, error: "Никнейм занят" });
+    fields.push("nickname=?");
+    params.push(req.body.nickname);
+  }
+  if (req.body.phone !== undefined) {
+    fields.push("phone=?");
+    params.push(req.body.phone);
+  }
+  if (req.body.email !== undefined) {
+    fields.push("email=?");
+    params.push(req.body.email);
+  }
+
+  if (!fields.length)
+    return res.json({ success: false, error: "Нечего обновлять" });
+  try {
+    params.push(uid);
+    await run("UPDATE users SET " + fields.join(",") + " WHERE id=?", params);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Ошибка обновления пользователя:", err.message);
+    res.json({ success: false, error: "Ошибка сервера" });
+  }
+});
+
+// GET /api/user/:id/benches
+app.get("/api/user/:id/benches", async (req, res) => {
+  const uid = parseInt(req.params.id);
+  try {
+    const benches = await q(
+      "SELECT id, name, description, status, admin_comment, created_at, rating FROM benches WHERE user_id=? ORDER BY created_at DESC",
+      [uid],
+    );
+    res.json({ success: true, benches });
+  } catch (err) {
+    console.error("Ошибка получения скамеек пользователя:", err.message);
+    res.json({ success: false, error: "Ошибка сервера" });
+  }
+});
+
+// GET /api/user/:id/favorites
+app.get("/api/user/:id/favorites", async (req, res) => {
+  const uid = parseInt(req.params.id);
+  try {
+    const favs = await q(
+      "SELECT b.id, b.name, b.description, b.latitude, b.longitude, b.status, b.admin_comment FROM benches b JOIN bench_favorites f ON b.id=f.bench_id WHERE f.user_id=? ORDER BY f.created_at DESC",
+      [uid],
+    );
+    res.json({ success: true, favorites: favs });
+  } catch (err) {
+    console.error("Ошибка получения избранного:", err.message);
+    res.json({ success: false, error: "Ошибка сервера" });
+  }
+});
+
+// GET /api/user/:id/received-reviews
+app.get("/api/user/:id/received-reviews", async (req, res) => {
+  const uid = parseInt(req.params.id);
+  try {
+    const reviews = await q(
+      "SELECT r.id, r.rating, r.comment, r.created_at, u.nickname as reviewer, u.avatar as reviewer_avatar FROM bench_ratings r JOIN benches b ON r.bench_id=b.id LEFT JOIN users u ON r.user_id=u.id WHERE b.user_id=? ORDER BY r.created_at DESC",
+      [uid],
+    );
+    const withPhotos = await attachPhotos(
+      reviews,
+      "id",
+      "review_photos",
+      "review_id",
+    );
+    res.json({ success: true, reviews: withPhotos });
+  } catch (err) {
+    console.error("Ошибка получения полученных отзывов:", err.message);
+    res.json({ success: false, error: "Ошибка сервера" });
+  }
+});
+
+// GET /api/user/:id/reports
+app.get("/api/user/:id/reports", async (req, res) => {
+  const uid = parseInt(req.params.id);
+  try {
+    const reports = await q(
+      "SELECT r.*, b.name as bench_name FROM bench_reports r LEFT JOIN benches b ON r.bench_id=b.id WHERE r.user_id=? ORDER BY r.created_at DESC",
+      [uid],
+    );
+    const withPhotos = await attachPhotos(
+      reports,
+      "id",
+      "report_photos",
+      "report_id",
+    );
+    res.json({ success: true, reports: withPhotos });
+  } catch (err) {
+    console.error("Ошибка получения жалоб:", err.message);
+    res.json({ success: false, error: "Ошибка сервера" });
+  }
+});
+
+// DELETE /api/user/reports/:id
+app.delete("/api/user/reports/:id", requireAuth, async (req, res) => {
+  const rid = parseInt(req.params.id);
+  try {
+    await run("DELETE FROM bench_reports WHERE id=?", [rid]);
+    await run("DELETE FROM report_photos WHERE report_id=?", [rid]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Ошибка удаления жалобы:", err.message);
+    res.json({ success: false, error: "Ошибка сервера" });
+  }
+});
+
+// GET /api/user/:id/notifications
+app.get("/api/user/:id/notifications", async (req, res) => {
+  const uid = parseInt(req.params.id);
+  try {
+    const notices = await q(
+      "SELECT id, user_id, message, type, read, related_id, created_at FROM user_notice WHERE user_id=? ORDER BY created_at DESC",
+      [uid],
+    );
+    res.json({ success: true, notifications: notices });
+  } catch (err) {
+    console.error("Ошибка получения уведомлений:", err.message);
+    res.json({ success: false, error: "Ошибка сервера" });
+  }
+});
+
+// POST /api/user/:id/notifications/read
+app.post("/api/user/:id/notifications/read", requireAuth, async (req, res) => {
+  const uid = parseInt(req.params.id);
+  try {
+    await run("UPDATE user_notice SET read=1 WHERE user_id=?", [uid]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Ошибка пометки уведомлений прочитанными:", err.message);
+    res.json({ success: false, error: "Ошибка сервера" });
+  }
+});
+
+// POST /api/user/:id/notifications/clear
+app.post("/api/user/:id/notifications/clear", requireAuth, async (req, res) => {
+  const uid = parseInt(req.params.id);
+  try {
+    await run("DELETE FROM user_notice WHERE user_id=? AND read=1", [uid]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Ошибка очистки уведомлений:", err.message);
+    res.json({ success: false, error: "Ошибка сервера" });
+  }
+});
+
+// GET /api/user/:id/badges
+app.get("/api/user/:id/badges", async (req, res) => {
+  const uid = parseInt(req.params.id);
+  try {
+    const user = await q(
+      "SELECT total_benches, reputation, total_reviews_received FROM users WHERE id=?",
+      [uid],
+    );
+    const badges = [];
+    if (user.length) {
+      const u = user[0];
+      if (u.total_benches >= 1)
+        badges.push({ icon: "fa-solid fa-chair", name: "Первая скамейка" });
+      if (u.total_benches >= 5)
+        badges.push({ icon: "fa-solid fa-seedling", name: "Эксперт" });
+      if (u.reputation >= 5)
+        badges.push({ icon: "fa-solid fa-star", name: "Популярный" });
+      if (u.total_reviews_received >= 10)
+        badges.push({ icon: "fa-solid fa-comments", name: "Рецензируемый" });
+    }
+    res.json({ success: true, badges });
+  } catch (err) {
+    console.error("Ошибка получения достижений:", err.message);
+    res.json({ success: true, badges: [] });
+  }
+});
+
+// GET /api/stats (cached)
+app.get("/api/stats", async (req, res) => {
+  try {
+    const cached = getCache("stats");
+    if (cached) return res.json(cached);
+    const benches = await q(
+      "SELECT COUNT(*) as c FROM benches WHERE status='active'",
+    );
+    const users = await q("SELECT COUNT(*) as c FROM users");
+    const result = {
+      success: true,
+      total_benches: benches.length ? benches[0].c : 0,
+      total_users: users.length ? users[0].c : 0,
+    };
+    setCache("stats", result);
+    res.json(result);
+  } catch (err) {
+    console.error("Ошибка получения статистики:", err.message);
+    res.json({ success: true, total_benches: 0, total_users: 0 });
+  }
+});
+
+// GET /api/top-users (cached)
+app.get("/api/top-users", async (req, res) => {
+  try {
+    const cached = getCache("top-users");
+    if (cached) return res.json(cached);
+    const users = await q(
+      "SELECT id, avatar, nickname, reputation FROM users ORDER BY reputation DESC, total_benches DESC LIMIT 20",
+    );
+    const result = { success: true, users };
+    setCache("top-users", result);
+    res.json(result);
+  } catch (err) {
+    console.error("Ошибка получения топ пользователей:", err.message);
+    res.json({ success: false, error: "Ошибка сервера" });
+  }
+});
+
+// GET /api/benches (batched enrichment)
+app.get("/api/benches", async (req, res) => {
+  const uid = req.user_id || req.query.user_id;
+  const uidNum = uid ? parseInt(uid) : null;
+  try {
+    const benches = await q(
+      "SELECT b.*, u.avatar as user_avatar FROM benches b LEFT JOIN users u ON b.user_id=u.id WHERE b.status='active' ORDER BY b.created_at DESC",
+    );
+    const enriched = await enrichBenches(benches, uidNum);
+    res.json({ success: true, benches: enriched });
+  } catch (err) {
+    console.error("Ошибка получения списка скамеек:", err.message);
+    res.json({ success: false, error: "Ошибка сервера" });
+  }
+});
+
+// POST /api/benches
 app.post(
   "/api/benches",
   requireAuth,
   upload.array("photos", 10),
-  function (req, res) {
-    console.log("POST /api/benches");
-    console.log("  files count:", req.files ? req.files.length : 0);
-    if (req.files) {
-      req.files.forEach(function (file, i) {
-        console.log(
-          "  file",
-          i,
-          ":",
-          file.originalname,
-          "->",
-          file.filename,
-          "size:",
-          file.size,
-        );
-      });
-    }
-    console.log("  body:", req.body);
-
-    var d = req.body.description,
+  async (req, res) => {
+    const d = req.body.description,
       lat = req.body.latitude,
       lng = req.body.longitude,
       uid = req.user_id,
@@ -305,536 +864,519 @@ app.post(
       return res.json({ success: false, error: "Фото обязательно!" });
 
     try {
-      run(
-        "INSERT INTO benches(name,description,latitude,longitude,user_id,user_name,status)VALUES(?,?,?,?,?,?,?)",
+      await run(
+        "INSERT INTO benches(name,description,latitude,longitude,user_id,user_name,status) VALUES (?,?,?,?,?,?,?)",
         ["Скамейка", d || "", lat, lng, uid, un, "pending"],
       );
-      var benchId = null;
-      try {
-        var idRows = db.exec("SELECT last_insert_rowid() as id");
-        if (idRows.length > 0 && idRows[0].values.length > 0) {
-          benchId = idRows[0].values[0][0];
-        }
-      } catch (e) {
-        console.warn("last_insert_rowid failed:", e.message);
-      }
-      if (!benchId) {
-        var maxResult = db.exec("SELECT MAX(id) as id FROM benches");
-        benchId = maxResult.length > 0 ? maxResult[0].values[0][0] : null;
-      }
-      if (!benchId) {
-        console.error("Failed to get bench ID after insert");
+      const benchId = await d1LastInsertRowid("benches");
+      if (!benchId)
         return res.json({ success: false, error: "Ошибка создания скамейки" });
-      }
-      console.log("New bench created:", benchId, "files:", req.files.length);
 
-      for (var i = 0; i < req.files.length; i++) {
-        var photoUrl = "/uploads/" + req.files[i].filename;
-        run("INSERT INTO bench_photos(bench_id,photo_url)VALUES(?,?)", [
+      for (const f of req.files) {
+        await run("INSERT INTO bench_photos(bench_id,photo_url) VALUES (?,?)", [
           benchId,
-          photoUrl,
+          "/uploads/" + f.filename,
         ]);
-        console.log("Photo saved:", photoUrl, "for bench:", benchId);
       }
-
-      if (uid) {
-        run("UPDATE users SET total_benches=total_benches+1 WHERE id=?", [uid]);
-      }
-      createNotification(
+      if (uid)
+        await run("UPDATE users SET total_benches=total_benches+1 WHERE id=?", [
+          uid,
+        ]);
+      await createNotification(
         null,
         "Новая скамейка #" + benchId + " на модерации",
         "admin",
+        benchId,
       );
-      res.json({ success: true, message: "Отправлено на модерацию" });
+
+      res.json({
+        success: true,
+        message: "Отправлено на модерацию",
+        bench_id: benchId,
+      });
     } catch (e) {
-      console.error("Error creating bench:", e);
+      console.error("Error creating bench:", e.message);
       res.json({ success: false, error: "Ошибка сервера: " + e.message });
     }
   },
 );
 
-app.get("/api/benches/:id/reviews", function (req, res) {
-  var reviews = q(
-    "SELECT br.*,u.nickname FROM bench_ratings br LEFT JOIN users u ON br.user_id=u.id WHERE br.bench_id=? ORDER BY br.created_at DESC",
-    [req.params.id],
-  );
-  var withPhotos = reviews.map(function (rev) {
-    var photos = q("SELECT id,photo_url FROM review_photos WHERE review_id=?", [
-      rev.id,
-    ]);
-    return Object.assign({}, rev, { photos: photos });
-  });
-  res.json({ success: true, reviews: withPhotos });
+// GET /api/benches/:id/reviews
+app.get("/api/benches/:id/reviews", async (req, res) => {
+  const benchId = parseInt(req.params.id);
+  try {
+    const reviews = await q(
+      "SELECT r.*, u.nickname, u.avatar as reviewer_avatar FROM bench_ratings r LEFT JOIN users u ON r.user_id=u.id WHERE r.bench_id=? ORDER BY r.created_at DESC",
+      [benchId],
+    );
+    const withPhotos = await attachPhotos(
+      reviews,
+      "id",
+      "review_photos",
+      "review_id",
+    );
+    res.json({ success: true, reviews: withPhotos });
+  } catch (err) {
+    console.error("Ошибка получения отзывов:", err.message);
+    res.json({ success: false, error: "Ошибка сервера" });
+  }
 });
 
+// POST /api/benches/:id/review
 app.post(
   "/api/benches/:id/review",
   requireAuth,
-  upload.array("photos", 5),
-  function (req, res) {
-    var ip = req.ip || req.socket.remoteAddress || "unknown";
-    if (!checkRateLimit("review:" + ip + ":" + req.user_id)) {
-      return res.json({
-        success: false,
-        error: "Слишком много отзывов. Подождите минуту.",
-      });
-    }
-    var r = req.body.rating,
-      c = req.body.comment,
-      uid = req.user_id,
-      bid = req.params.id;
-    var bench = q("SELECT user_id FROM benches WHERE id=?", [bid]);
-    if (bench.length && bench[0].user_id == uid) {
-      return res.json({
-        success: false,
-        error: "Нельзя оставить отзыв самому себе",
-      });
-    }
-    var existing = q(
-      "SELECT id FROM bench_ratings WHERE bench_id=? AND user_id=?",
-      [bid, uid],
-    );
-    if (existing.length)
-      return res.json({ success: false, error: "Вы уже оставили отзыв" });
-    run(
-      "INSERT INTO bench_ratings(bench_id,user_id,rating,comment)VALUES(?,?,?,?)",
-      [bid, uid, r, c || ""],
-    );
-    var lastIdRows = db.exec("SELECT last_insert_rowid() as id");
-    var reviewId = lastIdRows.length > 0 ? lastIdRows[0].values[0][0] : null;
-    if (!reviewId) {
-      var rows = db.exec("SELECT MAX(id) as id FROM bench_ratings");
-      reviewId = rows.length > 0 ? rows[0].values[0][0] : null;
-    }
-    if (req.files && req.files.length && reviewId) {
-      req.files.forEach(function (file) {
-        run("INSERT INTO review_photos(review_id,photo_url)VALUES(?,?)", [
-          reviewId,
-          "/uploads/" + file.filename,
-        ]);
-      });
-    }
-    var avgResult = q(
-      "SELECT AVG(rating) as a FROM bench_ratings WHERE bench_id=?",
-      [bid],
-    );
-    var avg = avgResult[0].a;
-    run("UPDATE benches SET rating=? WHERE id=?", [avg, bid]);
-    var benchResult = q("SELECT user_id FROM benches WHERE id=?", [bid]);
-    var owner = benchResult.length ? benchResult[0].user_id : null;
-    var bonus = r == 5 ? 5 : r == 4 ? 2 : r == 3 ? 1 : 0;
-    if (owner && bonus > 0 && owner !== uid) {
-      run(
-        "UPDATE users SET reputation=reputation+?,total_reviews_received=total_reviews_received+1 WHERE id=?",
-        [bonus, owner],
+  upload.array("photos", 10),
+  async (req, res) => {
+    const benchId = parseInt(req.params.id);
+    const uid = req.user_id;
+    const rating = parseInt(req.body.rating);
+    const comment = req.body.comment || "";
+    if (!rating || rating < 1 || rating > 5)
+      return res.json({ success: false, error: "Нужна оценка" });
+
+    try {
+      const bench = await q("SELECT user_id FROM benches WHERE id=?", [
+        benchId,
+      ]);
+      if (!bench.length)
+        return res.json({ success: false, error: "Скамейка не найдена" });
+      if (bench[0].user_id == uid)
+        return res.json({
+          success: false,
+          error: "Нельзя оставлять отзыв самому себе",
+        });
+
+      await run(
+        "INSERT INTO bench_ratings(bench_id,user_id,rating,comment) VALUES (?,?,?,?)",
+        [benchId, uid, rating, comment],
       );
+      const reviewId = await d1LastInsertRowid("bench_ratings");
+
+      if (req.files && req.files.length) {
+        for (const f of req.files) {
+          await run(
+            "INSERT INTO review_photos(review_id,photo_url) VALUES (?,?)",
+            [reviewId, "/uploads/" + f.filename],
+          );
+        }
+      }
+      await q(
+        "UPDATE benches SET rating=(SELECT AVG(rating) FROM bench_ratings WHERE bench_id=?) WHERE id=?",
+        [benchId, benchId],
+      );
+      await run(
+        "UPDATE users SET total_reviews_received=total_reviews_received+1 WHERE id=?",
+        [bench[0].user_id],
+      );
+      await createUserNotice(
+        bench[0].user_id,
+        "На вашу скамейку #" + benchId + " оставили отзыв",
+        "info",
+        benchId,
+      );
+
+      res.json({ success: true });
+    } catch (err) {
+      console.error("Ошибка создания отзыва:", err.message);
+      res.json({ success: false, error: "Ошибка сервера" });
     }
-    res.json({ success: true, bonus: bonus });
   },
 );
 
-app.get("/api/admin/reviews", requireAdmin, function (req, res) {
-  var reviews = q(
-    "SELECT br.*, b.description as bench_name, u.nickname FROM bench_ratings br LEFT JOIN benches b ON br.bench_id=b.id LEFT JOIN users u ON br.user_id=u.id ORDER BY br.created_at DESC",
-  );
-  var withPhotos = reviews.map(function (rev) {
-    var photos = q("SELECT id,photo_url FROM review_photos WHERE review_id=?", [
-      rev.id,
-    ]);
-    return Object.assign({}, rev, { photos: photos });
-  });
-  res.json({ success: true, reviews: withPhotos });
-});
-
-app.delete("/api/admin/reviews/:id", requireAdmin, function (req, res) {
-  var reviewId = req.params.id;
-  var review = q("SELECT bench_id FROM bench_ratings WHERE id=?", [reviewId]);
-  if (!review.length) {
-    return res.json({ success: false, error: "Отзыв не найден" });
-  }
-  var benchId = review[0].bench_id;
-  run("DELETE FROM review_photos WHERE review_id=?", [reviewId]);
-  run("DELETE FROM bench_ratings WHERE id=?", [reviewId]);
-  if (benchId) {
-    var avgResult = q(
-      "SELECT AVG(rating) as a FROM bench_ratings WHERE bench_id=?",
+// POST /api/benches/:id/like
+app.post("/api/benches/:id/like", requireAuth, async (req, res) => {
+  const benchId = parseInt(req.params.id);
+  const uid = req.user_id;
+  try {
+    const existing = await q(
+      "SELECT id FROM bench_likes WHERE bench_id=? AND user_id=?",
+      [benchId, uid],
+    );
+    let liked;
+    if (existing.length) {
+      await run("DELETE FROM bench_likes WHERE bench_id=? AND user_id=?", [
+        benchId,
+        uid,
+      ]);
+      liked = false;
+    } else {
+      await run("INSERT INTO bench_likes(bench_id,user_id) VALUES (?,?)", [
+        benchId,
+        uid,
+      ]);
+      liked = true;
+    }
+    const likes = await q(
+      "SELECT COUNT(*) as count FROM bench_likes WHERE bench_id=?",
       [benchId],
     );
-    var avg = avgResult[0].a || 0;
-    run("UPDATE benches SET rating=? WHERE id=?", [avg, benchId]);
-  }
-  res.json({ success: true });
-});
-
-app.post("/api/benches/:id/favorite", requireAuth, function (req, res) {
-  var uid = req.user_id,
-    bid = req.params.id;
-  var existing = q(
-    "SELECT id FROM bench_favorites WHERE bench_id=? AND user_id=?",
-    [bid, uid],
-  );
-  if (existing.length) {
-    run("DELETE FROM bench_favorites WHERE bench_id=? AND user_id=?", [
-      bid,
-      uid,
-    ]);
-    res.json({ success: true, favorited: false });
-  } else {
-    run("INSERT INTO bench_favorites(bench_id,user_id)VALUES(?,?)", [bid, uid]);
-    res.json({ success: true, favorited: true });
+    res.json({
+      success: true,
+      liked,
+      likes: likes.length ? likes[0].count : 0,
+    });
+  } catch (err) {
+    console.error("Ошибка лайка:", err.message);
+    res.json({ success: false, error: "Ошибка сервера" });
   }
 });
 
-app.post("/api/benches/:id/like", requireAuth, function (req, res) {
-  var uid = req.user_id,
-    bid = req.params.id;
-  if (!uid) {
-    return res.json({ success: false, error: "Войдите" });
+// POST /api/benches/:id/favorite
+app.post("/api/benches/:id/favorite", requireAuth, async (req, res) => {
+  const benchId = parseInt(req.params.id);
+  const uid = req.user_id;
+  try {
+    const existing = await q(
+      "SELECT id FROM bench_favorites WHERE bench_id=? AND user_id=?",
+      [benchId, uid],
+    );
+    let favorited;
+    if (existing.length) {
+      await run("DELETE FROM bench_favorites WHERE bench_id=? AND user_id=?", [
+        benchId,
+        uid,
+      ]);
+      favorited = false;
+    } else {
+      await run("INSERT INTO bench_favorites(bench_id,user_id) VALUES (?,?)", [
+        benchId,
+        uid,
+      ]);
+      favorited = true;
+    }
+    res.json({ success: true, favorited });
+  } catch (err) {
+    console.error("Ошибка избранного:", err.message);
+    res.json({ success: false, error: "Ошибка сервера" });
   }
-  var existing = q(
-    "SELECT id FROM bench_likes WHERE bench_id=? AND user_id=?",
-    [bid, uid],
-  );
-  var liked = false;
-  if (existing.length) {
-    run("DELETE FROM bench_likes WHERE bench_id=? AND user_id=?", [bid, uid]);
-  } else {
-    run("INSERT INTO bench_likes(bench_id,user_id)VALUES(?,?)", [bid, uid]);
-    liked = true;
-  }
-  var likes = q("SELECT COUNT(*) as count FROM bench_likes WHERE bench_id=?", [
-    bid,
-  ]);
-  res.json({
-    success: true,
-    liked: liked,
-    likes: likes.length ? likes[0].count : 0,
-  });
 });
 
-app.get("/api/benches/:id/likes", function (req, res) {
-  var likes = q("SELECT COUNT(*) as count FROM bench_likes WHERE bench_id=?", [
-    req.params.id,
-  ]);
-  res.json({ success: true, likes: likes.length ? likes[0].count : 0 });
-});
-
-app.get("/api/user/:id/favorites", function (req, res) {
-  var favs = q(
-    "SELECT b.* FROM benches b JOIN bench_favorites f ON b.id=f.bench_id WHERE f.user_id=?",
-    [req.params.id],
-  );
-  res.json({ success: true, favorites: favs });
-});
-
+// POST /api/benches/:id/report
 app.post(
   "/api/benches/:id/report",
   requireAuth,
-  upload.array("photos", 5),
-  function (req, res) {
-    var ip = req.ip || req.socket.remoteAddress || "unknown";
-    if (!checkRateLimit("report:" + ip + ":" + req.user_id)) {
-      return res.json({
-        success: false,
-        error: "Слишком много жалоб. Подождите минуту.",
-      });
-    }
-    var reportId = null;
+  upload.array("photos", 10),
+  async (req, res) => {
+    const benchId = parseInt(req.params.id);
+    const uid = req.user_id;
+    const reason = req.body.reason || "";
     try {
-      run("INSERT INTO bench_reports(bench_id,user_id,reason)VALUES(?,?,?)", [
-        req.params.id,
-        req.user_id,
-        req.body.reason || "not_exists",
-      ]);
-      var lastIdRows = db.exec("SELECT last_insert_rowid() as id");
-      reportId = lastIdRows.length > 0 ? lastIdRows[0].values[0][0] : null;
-      if (!reportId) {
-        var rows = db.exec("SELECT MAX(id) as id FROM bench_reports");
-        reportId = rows.length > 0 ? rows[0].values[0][0] : null;
+      await run(
+        "INSERT INTO bench_reports(bench_id,user_id,reason,status) VALUES (?,?,?,?)",
+        [benchId, uid, reason, "pending"],
+      );
+      const reportId = await d1LastInsertRowid("bench_reports");
+      if (req.files && req.files.length) {
+        for (const f of req.files) {
+          await run(
+            "INSERT INTO report_photos(report_id,photo_url) VALUES (?,?)",
+            [reportId, "/uploads/" + f.filename],
+          );
+        }
       }
-      if (req.files && req.files.length && reportId) {
-        req.files.forEach(function (file) {
-          run("INSERT INTO report_photos(report_id,photo_url)VALUES(?,?)", [
-            reportId,
-            "/uploads/" + file.filename,
-          ]);
-        });
-      }
-      createNotification(null, "Новая жалоба #" + reportId, "admin");
-      res.json({ success: true });
-    } catch (e) {
-      console.error("Error creating report:", e);
-      res.json({ success: false, error: "Ошибка создания жалобы" });
+      await createNotification(
+        null,
+        "Новая жалоба #" + reportId + " на скамейку #" + benchId,
+        "admin",
+        benchId,
+      );
+      res.json({ success: true, report_id: reportId });
+    } catch (err) {
+      console.error("Ошибка создания жалобы:", err.message);
+      res.json({ success: false, error: "Ошибка сервера" });
     }
   },
 );
 
-app.get("/api/user/:id/reports", requireAuth, function (req, res) {
-  if (parseInt(req.params.id) !== req.user_id) {
-    return res.json({ success: false, error: "Доступ запрещен" });
-  }
-  var reports = q(
-    "SELECT br.*,COALESCE(b.name,'Скамейка') as bench_name FROM bench_reports br LEFT JOIN benches b ON br.bench_id=b.id WHERE br.user_id=? ORDER BY br.created_at DESC",
-    [req.params.id],
-  );
-  var withPhotos = reports.map(function (rp) {
-    var photos = q("SELECT id,photo_url FROM report_photos WHERE report_id=?", [
-      rp.id,
-    ]);
-    return Object.assign({}, rp, { photos: photos });
-  });
-  res.json({ success: true, reports: withPhotos });
-});
-
-app.post("/api/reviews/:id/report", requireAuth, function (req, res) {
-  var ip = req.ip || req.socket.remoteAddress || "unknown";
-  if (!checkRateLimit("reviewreport:" + ip + ":" + req.user_id)) {
-    return res.json({
-      success: false,
-      error: "Слишком много жалоб. Подождите минуту.",
-    });
-  }
-  var reviewId = req.params.id;
-  var review = q("SELECT id FROM bench_ratings WHERE id=?", [reviewId]);
-  if (!review.length) {
-    return res.json({ success: false, error: "Отзыв не найден" });
-  }
-  run("INSERT INTO bench_reports(bench_id,user_id,reason)VALUES(?,?,?)", [
-    req.body.bench_id || 0,
-    req.user_id,
-    req.body.reason || "spam",
-  ]);
-  res.json({ success: true });
-});
-
-app.delete("/api/user/reports/:id", requireAuth, function (req, res) {
-  var reportId = req.params.id;
-  var report = q("SELECT id,user_id FROM bench_reports WHERE id=?", [reportId]);
-  if (!report.length) {
-    return res.json({ success: false, error: "Жалоба не найдена" });
-  }
-  if (parseInt(report[0].user_id) !== req.user_id) {
-    return res.json({ success: false, error: "Доступ запрещен" });
-  }
-  run("DELETE FROM bench_reports WHERE id=?", [reportId]);
-  res.json({ success: true });
-});
-
-app.get("/api/user/:id/benches", requireAuth, function (req, res) {
-  if (parseInt(req.params.id) !== req.user_id) {
-    return res.json({ success: false, error: "Доступ запрещен" });
-  }
-  var benches = q(
-    "SELECT * FROM benches WHERE user_id=? ORDER BY created_at DESC",
-    [req.params.id],
-  );
-  res.json({ success: true, benches: benches });
-});
-
-app.get("/api/user/:id/received-reviews", requireAuth, function (req, res) {
-  if (parseInt(req.params.id) !== req.user_id) {
-    return res.json({ success: false, error: "Доступ запрещен" });
-  }
-  var reviews = q(
-    "SELECT br.*,u.nickname as reviewer FROM bench_ratings br LEFT JOIN users u ON br.user_id=u.id WHERE br.bench_id IN (SELECT id FROM benches WHERE user_id=?) ORDER BY br.created_at DESC",
-    [req.params.id],
-  );
-  var withPhotos = reviews.map(function (rev) {
-    var photos = q("SELECT id,photo_url FROM review_photos WHERE review_id=?", [
-      rev.id,
-    ]);
-    return Object.assign({}, rev, { photos: photos });
-  });
-  res.json({ success: true, reviews: withPhotos });
-});
-
-app.get("/api/user/:id/badges", requireAuth, function (req, res) {
-  if (parseInt(req.params.id) !== req.user_id) {
-    return res.json({ success: false, error: "Доступ запрещен" });
-  }
-  var users = q(
-    "SELECT reputation,total_benches,total_reviews_received FROM users WHERE id=?",
-    [req.params.id],
-  );
-  var badges = [];
-  if (users.length) {
-    var u = users[0];
-    if (u.total_benches >= 1)
-      badges.push({ name: "Первая скамейка", icon: "fa-chair" });
-    if (u.total_benches >= 5)
-      badges.push({ name: "5 скамеек", icon: "fa-award" });
-    if (u.total_benches >= 10)
-      badges.push({ name: "10 скамеек", icon: "fa-trophy" });
-    if (u.total_reviews_received >= 1)
-      badges.push({ name: "Первый отзыв", icon: "fa-comment" });
-    if (u.reputation >= 10) badges.push({ name: "Новичок", icon: "fa-star" });
-    if (u.reputation >= 50) badges.push({ name: "Активист", icon: "fa-medal" });
-    if (u.reputation >= 100) badges.push({ name: "Легенда", icon: "fa-crown" });
-  }
-  res.json({ success: true, badges: badges });
-});
-
-app.get("/api/top-users", function (req, res) {
-  var users = q(
-    "SELECT id,nickname,reputation,total_benches FROM users ORDER BY reputation DESC LIMIT 10",
-  );
-  res.json({ success: true, users: users });
-});
-
-app.post("/api/user/:id/theme", requireAuth, function (req, res) {
-  if (parseInt(req.params.id) !== req.user_id) {
-    return res.json({ success: false, error: "Доступ запрещен" });
-  }
-  run("UPDATE users SET theme=? WHERE id=?", [req.body.theme, req.params.id]);
-  res.json({ success: true });
-});
-
-app.get("/api/admin/benches", requireAdmin, function (req, res) {
-  var benches = q("SELECT * FROM benches ORDER BY created_at DESC");
-  var withPhotos = benches.map(function (b) {
-    var photos = q("SELECT id,photo_url FROM bench_photos WHERE bench_id=?", [
-      b.id,
-    ]);
-    var likes = q(
-      "SELECT COUNT(*) as count FROM bench_likes WHERE bench_id=?",
-      [b.id],
+// POST /api/reviews/:id/report
+app.post("/api/reviews/:id/report", requireAuth, async (req, res) => {
+  const reviewId = parseInt(req.params.id);
+  const uid = req.user_id;
+  const reason = req.body.reason || "spam";
+  try {
+    await run(
+      "INSERT INTO review_reports(review_id,user_id,reason) VALUES (?,?,?)",
+      [reviewId, uid, reason],
     );
-    return Object.assign({}, b, {
-      photos: photos,
-      likes: likes.length ? likes[0].count : 0,
-    });
-  });
-  res.json({ success: true, benches: withPhotos });
-});
-
-app.get("/api/admin/users", requireAdmin, function (req, res) {
-  var users = q(
-    "SELECT id,login,nickname,reputation,total_benches,is_admin,created_at FROM users ORDER BY created_at DESC",
-  );
-  res.json({ success: true, users: users });
-});
-
-app.post("/api/admin/users/:id/admin", requireAdmin, function (req, res) {
-  var is_admin = req.body.is_admin ? 1 : 0;
-  run("UPDATE users SET is_admin=? WHERE id=?", [is_admin, req.params.id]);
-  res.json({ success: true });
-});
-
-app.get("/api/admin/reports", requireAdmin, function (req, res) {
-  var reports = q(
-    "SELECT br.*,COALESCE(b.name,'Скамейка') as bench_name,u.nickname FROM bench_reports br LEFT JOIN benches b ON br.bench_id=b.id LEFT JOIN users u ON br.user_id=u.id WHERE br.status='pending' ORDER BY br.created_at DESC",
-  );
-  var withPhotos = reports.map(function (rp) {
-    var photos = q("SELECT id,photo_url FROM report_photos WHERE report_id=?", [
-      rp.id,
-    ]);
-    return Object.assign({}, rp, { photos: photos });
-  });
-  res.json({ success: true, reports: withPhotos });
-});
-
-app.post("/api/admin/reports/:id/resolve", requireAdmin, function (req, res) {
-  run("UPDATE bench_reports SET status='resolved' WHERE id=?", [req.params.id]);
-  res.json({ success: true });
-});
-app.post("/api/admin/reports/:id/respond", requireAdmin, function (req, res) {
-  run(
-    "UPDATE bench_reports SET status='resolved',admin_response=? WHERE id=?",
-    [req.body.response, req.params.id],
-  );
-  res.json({ success: true });
-});
-app.post("/api/admin/benches/:id/status", requireAdmin, function (req, res) {
-  run("UPDATE benches SET status=? WHERE id=?", [
-    req.body.status,
-    req.params.id,
-  ]);
-  res.json({ success: true });
-});
-app.delete("/api/admin/benches/:id", requireAdmin, function (req, res) {
-  run("DELETE FROM bench_likes WHERE bench_id=?", [req.params.id]);
-  run("DELETE FROM bench_favorites WHERE bench_id=?", [req.params.id]);
-  run("DELETE FROM bench_ratings WHERE bench_id=?", [req.params.id]);
-  run("DELETE FROM bench_reports WHERE bench_id=?", [req.params.id]);
-  run("DELETE FROM bench_photos WHERE bench_id=?", [req.params.id]);
-  run("DELETE FROM benches WHERE id=?", [req.params.id]);
-  res.json({ success: true });
-});
-app.get("/api/stats", function (req, res) {
-  var b = q("SELECT COUNT(*) as c FROM benches WHERE status='active'");
-  var u = q("SELECT COUNT(*) as c FROM users");
-  var pending = q(
-    "SELECT COUNT(*) as c FROM bench_reports WHERE status='pending'",
-  );
-  var pendingBenches = q(
-    "SELECT COUNT(*) as c FROM benches WHERE status='pending'",
-  );
-  res.json({
-    success: true,
-    total_benches: b[0].c,
-    total_users: u[0].c,
-    pending_reports: pending[0].c,
-    pending_benches: pendingBenches[0].c,
-  });
-});
-
-app.get("/api/admin/notifications", requireAdmin, function (req, res) {
-  var items = q(
-    "SELECT * FROM notifications WHERE (user_id=? OR user_id IS NULL) ORDER BY created_at DESC LIMIT 50",
-    [req.user_id],
-  );
-  res.json({ success: true, notifications: items });
-});
-
-app.post("/api/admin/notifications/read", requireAdmin, function (req, res) {
-  run("UPDATE notifications SET read=1 WHERE (user_id=? OR user_id IS NULL)", [
-    req.user_id,
-  ]);
-  res.json({ success: true });
-});
-
-function createNotification(userId, message, type) {
-  if (type === "admin") {
-    run("INSERT INTO notifications(user_id,message,type)VALUES(NULL,?,?)", [
-      message,
-      type || "info",
-    ]);
-  } else if (userId) {
-    run("INSERT INTO notifications(user_id,message,type)VALUES(?,?,?)", [
-      userId,
-      message,
-      type || "info",
-    ]);
-  } else {
-    run("INSERT INTO notifications(message,type)VALUES(?,?)", [
-      message,
-      type || "info",
-    ]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Ошибка жалобы на отзыв:", err.message);
+    res.json({ success: false, error: "Ошибка сервера" });
   }
-  saveDatabase();
-}
-
-app.get("/admin", function (req, res) {
-  res.sendFile(__dirname + "/public/admin.html");
 });
 
-app.get("/admin.html", function (req, res) {
-  res.sendFile(__dirname + "/public/admin.html");
-});
+// ---- Admin endpoints ------------------------------------------------------
 
-app.post("/api/logout", function (req, res) {
-  var token = req.headers.authorization || "";
-  if (token.startsWith("Bearer ")) {
-    token = token.substring(7);
+// GET /api/admin/benches
+app.get("/api/admin/benches", requireAdmin, async (req, res) => {
+  try {
+    const benches = await q(
+      "SELECT b.*, u.avatar as user_avatar FROM benches b LEFT JOIN users u ON b.user_id=u.id ORDER BY b.created_at DESC",
+    );
+    const enriched = await enrichBenches(benches, null);
+    res.json({ success: true, benches: enriched });
+  } catch (err) {
+    console.error("Ошибка получения скамеек админом:", err.message);
+    res.json({ success: false, error: "Ошибка сервера" });
   }
-  if (token) {
-    run("DELETE FROM sessions WHERE token=?", [token]);
-  }
-  res.json({ success: true });
 });
 
-initDatabase().then(function () {
-  app.listen(PORT, function () {
-    console.log("Сервер: http://localhost:" + PORT);
+// GET /api/admin/users
+app.get("/api/admin/users", requireAdmin, async (req, res) => {
+  try {
+    const users = await q(
+      "SELECT id, login, nickname, reputation, total_benches, is_admin, banned, ban_reason, avatar, created_at FROM users ORDER BY created_at DESC",
+    );
+    res.json({ success: true, users });
+  } catch (err) {
+    console.error("Ошибка получения пользователей:", err.message);
+    res.json({ success: false, error: "Ошибка сервера" });
+  }
+});
+
+// GET /api/admin/reports
+app.get("/api/admin/reports", requireAdmin, async (req, res) => {
+  try {
+    const reports = await q(
+      "SELECT r.*, u.nickname, b.name as bench_name FROM bench_reports r LEFT JOIN users u ON r.user_id=u.id LEFT JOIN benches b ON r.bench_id=b.id ORDER BY r.created_at DESC",
+    );
+    const withPhotos = await attachPhotos(
+      reports,
+      "id",
+      "report_photos",
+      "report_id",
+    );
+    res.json({ success: true, reports: withPhotos });
+  } catch (err) {
+    console.error("Ошибка получения жалоб:", err.message);
+    res.json({ success: false, error: "Ошибка сервера" });
+  }
+});
+
+// GET /api/admin/reviews
+app.get("/api/admin/reviews", requireAdmin, async (req, res) => {
+  try {
+    const reviews = await q(
+      "SELECT r.*, u.nickname, b.name as bench_name FROM bench_ratings r LEFT JOIN users u ON r.user_id=u.id LEFT JOIN benches b ON r.bench_id=b.id ORDER BY r.created_at DESC",
+    );
+    const withPhotos = await attachPhotos(
+      reviews,
+      "id",
+      "review_photos",
+      "review_id",
+    );
+    res.json({ success: true, reviews: withPhotos });
+  } catch (err) {
+    console.error("Ошибка получения отзывов:", err.message);
+    res.json({ success: false, error: "Ошибка сервера" });
+  }
+});
+
+// GET /api/admin/notifications
+app.get("/api/admin/notifications", requireAdmin, async (req, res) => {
+  try {
+    const notes = await q(
+      "SELECT id, message, type, read, related_id, created_at FROM notifications WHERE user_id IS NULL OR type='admin' ORDER BY created_at DESC",
+    );
+    res.json({ success: true, notifications: notes });
+  } catch (err) {
+    console.error("Ошибка получения уведомлений:", err.message);
+    res.json({ success: false, error: "Ошибка сервера" });
+  }
+});
+
+// POST /api/admin/benches/:id/status
+app.post("/api/admin/benches/:id/status", requireAdmin, async (req, res) => {
+  const benchId = parseInt(req.params.id);
+  const newStatus = req.body.status;
+  const adminComment = req.body.admin_comment || null;
+  try {
+    const bench = await q("SELECT user_id, user_name FROM benches WHERE id=?", [
+      benchId,
+    ]);
+    if (!bench.length)
+      return res.json({ success: false, error: "Скамейка не найдена" });
+
+    await run("UPDATE benches SET status=?, admin_comment=? WHERE id=?", [
+      newStatus,
+      adminComment,
+      benchId,
+    ]);
+
+    if (newStatus === "active" && bench[0].user_id) {
+      await createUserNotice(
+        bench[0].user_id,
+        "Ваша скамейка #" + benchId + " одобрена!",
+        "success",
+        benchId,
+      );
+    } else if (newStatus === "rejected" && bench[0].user_id) {
+      await createUserNotice(
+        bench[0].user_id,
+        "Скамейка #" + benchId + " отклонена",
+        "error",
+        benchId,
+      );
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Ошибка изменения статуса:", err.message);
+    res.json({ success: false, error: "Ошибка сервера" });
+  }
+});
+
+// POST /api/admin/benches/:id/comment
+app.post("/api/admin/benches/:id/comment", requireAdmin, async (req, res) => {
+  const benchId = parseInt(req.params.id);
+  const comment = (req.body.comment || "").trim();
+  try {
+    const bench = await q("SELECT id FROM benches WHERE id=?", [benchId]);
+    if (!bench.length)
+      return res.json({ success: false, error: "Скамейка не найдена" });
+    await run("UPDATE benches SET admin_comment=? WHERE id=?", [comment, benchId]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Ошибка сохранения комментария:", err.message);
+    res.json({ success: false, error: "Ошибка сервера" });
+  }
+});
+
+// DELETE /api/admin/benches/:id
+app.delete("/api/admin/benches/:id", requireAdmin, async (req, res) => {
+  const benchId = parseInt(req.params.id);
+  try {
+    await run("DELETE FROM bench_likes WHERE bench_id=?", [benchId]);
+    await run("DELETE FROM bench_favorites WHERE bench_id=?", [benchId]);
+    await run("DELETE FROM bench_ratings WHERE bench_id=?", [benchId]);
+    await run(
+      "DELETE FROM review_photos WHERE review_id IN (SELECT id FROM bench_ratings WHERE bench_id=?)",
+      [benchId],
+    );
+    await run("DELETE FROM bench_reports WHERE bench_id=?", [benchId]);
+    await run(
+      "DELETE FROM report_photos WHERE report_id IN (SELECT id FROM bench_reports WHERE bench_id=?)",
+      [benchId],
+    );
+    await run("DELETE FROM bench_photos WHERE bench_id=?", [benchId]);
+    await run("DELETE FROM benches WHERE id=?", [benchId]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Ошибка удаления скамейки:", err.message);
+    res.json({ success: false, error: "Ошибка сервера" });
+  }
+});
+
+// POST /api/admin/users/:id/admin
+app.post("/api/admin/users/:id/admin", requireAdmin, async (req, res) => {
+  const uid = parseInt(req.params.id);
+  const isAdmin = req.body.is_admin ? 1 : 0;
+  try {
+    await run("UPDATE users SET is_admin=? WHERE id=?", [isAdmin, uid]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Ошибка изменения прав админа:", err.message);
+    res.json({ success: false, error: "Ошибка сервера" });
+  }
+});
+
+// POST /api/admin/reports/:id/respond
+app.post("/api/admin/reports/:id/respond", requireAdmin, async (req, res) => {
+  const reportId = parseInt(req.params.id);
+  const responseText = req.body.response || "";
+  try {
+    await run(
+      "UPDATE bench_reports SET admin_response=?, status='resolved' WHERE id=?",
+      [responseText, reportId],
+    );
+    const report = await q("SELECT user_id FROM bench_reports WHERE id=?", [
+      reportId,
+    ]);
+    if (report.length && report[0].user_id) {
+      await createUserNotice(
+        report[0].user_id,
+        "Ваша жалоба получила ответ от администратора",
+        "info",
+        reportId,
+      );
+    }
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Ошибка ответа на жалобу:", err.message);
+    res.json({ success: false, error: "Ошибка сервера" });
+  }
+});
+
+// POST /api/admin/reports/:id/resolve
+app.post("/api/admin/reports/:id/resolve", requireAdmin, async (req, res) => {
+  const reportId = parseInt(req.params.id);
+  try {
+    await run("UPDATE bench_reports SET status='resolved' WHERE id=?", [
+      reportId,
+    ]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Ошибка разрешения жалобы:", err.message);
+    res.json({ success: false, error: "Ошибка сервера" });
+  }
+});
+
+// DELETE /api/admin/reviews/:id
+app.delete("/api/admin/reviews/:id", requireAdmin, async (req, res) => {
+  const reviewId = parseInt(req.params.id);
+  try {
+    await run("DELETE FROM review_photos WHERE review_id=?", [reviewId]);
+    await run("DELETE FROM bench_ratings WHERE id=?", [reviewId]);
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Ошибка удаления отзыва:", err.message);
+    res.json({ success: false, error: "Ошибка сервера" });
+  }
+});
+
+// POST /api/admin/notifications/clear
+app.post("/api/admin/notifications/clear", requireAdmin, async (req, res) => {
+  try {
+    await run("DELETE FROM notifications WHERE `read`=1");
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Ошибка очистки уведомлений:", err.message);
+    res.json({ success: false, error: "Ошибка сервера" });
+  }
+});
+
+// POST /api/admin/notifications/read
+app.post("/api/admin/notifications/read", requireAdmin, async (req, res) => {
+  try {
+    await run("UPDATE notifications SET `read`=1");
+    res.json({ success: true });
+  } catch (err) {
+    console.error("Ошибка маркировки уведомлений как прочитанных:", err.message);
+    res.json({ success: false, error: "Ошибка сервера" });
+  }
+});
+
+// ---- Error handler ------  
+app.use((err, req, res, next) => {
+  if (err instanceof multer.MulterError) {
+    if (err.code === "LIMIT_FILE_SIZE")
+      return res.json({ success: false, error: "Файл слишком большой" });
+    if (err.code === "LIMIT_FILE_COUNT")
+      return res.json({ success: false, error: "Слишком много файлов" });
+    return res.json({ success: false, error: "Ошибка загрузки файла" });
+  }
+  console.error("Необработанная ошибка:", err);
+  res.json({ success: false, error: "Ошибка сервера" });
+});
+
+// ============================================================================
+//  Server startup
+// ============================================================================
+initDatabase()
+  .then(() => {
+    app.listen(PORT, () => console.log("Сервер: http://localhost:" + PORT));
+  })
+  .catch((err) => {
+    console.error("❌ Ошибка инициализации БД:", err.message);
+    process.exit(1);
   });
-});
