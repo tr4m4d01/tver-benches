@@ -3,15 +3,25 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     <title>Админ-панель - Скамейки Твери</title>
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
     />
-    <script
-      src="https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=1523c569-fb40-448b-8a73-6e1a37b34216"
-      type="text/javascript"
-    ></script>
+    <script>
+      (function () {
+        var s = document.createElement("script");
+        s.src =
+          "https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=1523c569-fb40-448b-8a73-6e1a37b34216&_=" +
+          Date.now();
+        s.type = "text/javascript";
+        s.defer = true;
+        document.head.appendChild(s);
+      })();
+    </script>
     <style>
       :root {
         --primary: #2d6da8;
@@ -357,6 +367,19 @@
         }
         return headers;
       }
+      function showToast(message) {
+        var existingToast = document.querySelector(".toast");
+        if (existingToast) existingToast.remove();
+
+        var toast = document.createElement("div");
+        toast.className = "toast";
+        toast.textContent = message;
+        document.body.appendChild(toast);
+
+        setTimeout(function () {
+          toast.remove();
+        }, 3000);
+      }
       async function login() {
         var l = document.getElementById("adminLogin").value.trim();
         var p = document.getElementById("adminPassword").value;
@@ -436,7 +459,7 @@
       }
       function loadStats() {
         Promise.all([
-          fetch("/api/admin/benches", { headers: adminHeaders() }).then(
+          fetch("/api/admin/benches", { headers: adminHeaders(), cache: "no-store" }).then(
             function (r) {
               return r.json();
             },
@@ -474,7 +497,7 @@
         });
       }
       function loadBenches() {
-        fetch("/api/admin/benches", { headers: adminHeaders() })
+        fetch("/api/admin/benches", { headers: adminHeaders(), cache: "no-store" })
           .then(function (r) {
             return r.json();
           })
@@ -548,7 +571,7 @@
       function viewBench(id) {
         var existing = document.getElementById("benchDetailModal");
         if (existing) existing.remove();
-        fetch("/api/admin/benches", { headers: adminHeaders() })
+        fetch("/api/admin/benches", { headers: adminHeaders(), cache: "no-store" })
           .then(function (r) {
             return r.json();
           })
@@ -658,7 +681,7 @@
         }
       }
       function loadUsers() {
-        fetch("/api/admin/users", { headers: adminHeaders() })
+        fetch("/api/admin/users", { headers: adminHeaders(), cache: "no-store" })
           .then(function (r) {
             return r.json();
           })
@@ -682,6 +705,14 @@
                    : '<div style="width:36px;height:36px;border-radius:50%;background:var(--primary);display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:0.9em;margin-right:8px">' +
                      (u.nickname ? u.nickname.charAt(0).toUpperCase() : "?") +
                      "</div>";
+                 var banBadge = u.banned
+                   ? '<span style="color:var(--red);font-size:0.8em">🚫 Забанен</span>'
+                   : "";
+                 var banBtn = u.id !== adminUserId
+                   ? (u.banned
+                       ? '<button class="btn-sm btn-approve" onclick="toggleBan(' + u.id + ',0)">✅ Разбанить</button>'
+                       : '<button class="btn-sm btn-reject" onclick="openBanModal(' + u.id + ',\'' + escapeHtml(u.nickname || "") + '\')">🚫 Забанить</button>')
+                   : "";
                  return (
                    '<div class="user-card"><div style="display:flex;align-items:center;gap:8px"><div>' +
                    avatarHtml +
@@ -691,20 +722,23 @@
                    escapeHtml(u.login) +
                    "</small>" +
                    adminBadge +
-                  '</div><div style="text-align:center"><div style="font-weight:700;color:var(--primary)">' +
-                  u.reputation +
-                  '</div><small style="color:var(--gray)">репутация</small></div><div style="text-align:center"><div style="font-weight:700">' +
-                  u.total_benches +
-                  '</div><small style="color:var(--gray)">скамеек</small></div><div style="display:flex;gap:5px">' +
-                  (u.is_admin
-                    ? '<button class="btn-sm btn-hide" onclick="toggleAdmin(' +
-                      u.id +
-                      ',0)">Убрать админа</button>'
-                    : '<button class="btn-sm btn-approve" onclick="toggleAdmin(' +
-                      u.id +
-                      ',1)">Сделать админом</button>') +
-                  "</div></div>"
-                );
+                   banBadge +
+                   '</div><div style="text-align:center"><div style="font-weight:700;color:var(--primary)">' +
+                   u.reputation +
+                   '</div><small style="color:var(--gray)">репутация</small></div><div style="text-align:center"><div style="font-weight:700">' +
+                   u.total_benches +
+                   '</div><small style="color:var(--gray)">скамеек</small></div><div style="display:flex;gap:5px">' +
+                   (u.is_admin
+                     ? '<button class="btn-sm btn-hide" onclick="toggleAdmin(' +
+                       u.id +
+                       ',0)">Убрать админа</button>'
+                     : '<button class="btn-sm btn-approve" onclick="toggleAdmin(' +
+                       u.id +
+                       ',1)">Сделать админом</button>') +
+                   banBtn +
+                   '<button class="btn-sm btn-view" onclick="openMessageModal(' + u.id + ',\'' + escapeHtml(u.nickname || "") + '\')">✉️ Сообщение</button>' +
+                   "</div></div>"
+                 );
               })
               .join("");
           });
@@ -728,6 +762,116 @@
         }).then(function () {
           loadUsers();
         });
+      }
+      function toggleBan(uid, isBanned) {
+        fetch("/api/admin/users/" + uid + "/ban", {
+          method: "POST",
+          headers: Object.assign(
+            { "Content-Type": "application/json" },
+            adminHeaders(),
+          ),
+          body: JSON.stringify({ is_banned: isBanned, reason: "" }),
+        })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (d) {
+            if (d.success) {
+              showToast(d.message);
+              loadUsers();
+            } else {
+              showToast(d.error || "Ошибка");
+            }
+          });
+      }
+      function openBanModal(uid, userName) {
+        var o = document.createElement("div");
+        o.className = "overlay-modal";
+        o.innerHTML =
+          '<div class="overlay-box"><h3>Бан пользователя</h3><p style="color:var(--gray);margin:10px 0">Пользователь: <b>' +
+          escapeHtml(userName) +
+          "</b></p>" +
+          '<textarea id="banReason" rows="3" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;color:var(--text)" placeholder="Введите причину бана..."></textarea>' +
+          '<div style="display:flex;gap:10px;margin-top:15px"><button class="btn-sm btn-reject" onclick="submitBan(' +
+          uid +
+          ')">🚫 Забанить</button><button class="btn-sm" style="background:rgba(255,255,255,0.1)" onclick="closeOverlay(this)">✕ Отмена</button></div></div>';
+        o.addEventListener("click", function (e) {
+          if (e.target === o) o.remove();
+        });
+        document.body.appendChild(o);
+      }
+      function submitBan(uid) {
+        var reason = document.getElementById("banReason").value.trim();
+        if (!reason) {
+          showToast("Введите причину бана");
+          return;
+        }
+        fetch("/api/admin/users/" + uid + "/ban", {
+          method: "POST",
+          headers: Object.assign(
+            { "Content-Type": "application/json" },
+            adminHeaders(),
+          ),
+          body: JSON.stringify({ is_banned: 1, reason: reason }),
+        })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (d) {
+            document.querySelectorAll(".overlay-modal").forEach(function (e) {
+              e.remove();
+            });
+            if (d.success) {
+              showToast(d.message);
+              loadUsers();
+            } else {
+              showToast(d.error || "Ошибка");
+            }
+          });
+      }
+      function openMessageModal(uid, userName) {
+        var o = document.createElement("div");
+        o.className = "overlay-modal";
+        o.innerHTML =
+          '<div class="overlay-box"><h3>Сообщение пользователю</h3><p style="color:var(--gray);margin:10px 0">Пользователь: <b>' +
+          escapeHtml(userName) +
+          "</b></p>" +
+          '<textarea id="adminMessage" rows="3" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;color:var(--text)" placeholder="Введите сообщение..."></textarea>' +
+          '<div style="display:flex;gap:10px;margin-top:15px"><button class="btn-sm btn-view" onclick="submitMessage(' +
+          uid +
+          ')">✉️ Отправить</button><button class="btn-sm" style="background:rgba(255,255,255,0.1)" onclick="closeOverlay(this)">✕ Отмена</button></div></div>';
+        o.addEventListener("click", function (e) {
+          if (e.target === o) o.remove();
+        });
+        document.body.appendChild(o);
+      }
+      function submitMessage(uid) {
+        var msg = document.getElementById("adminMessage").value.trim();
+        if (!msg) {
+          showToast("Введите сообщение");
+          return;
+        }
+        fetch("/api/admin/users/" + uid + "/message", {
+          method: "POST",
+          headers: Object.assign(
+            { "Content-Type": "application/json" },
+            adminHeaders(),
+          ),
+          body: JSON.stringify({ message: msg }),
+        })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (d) {
+            document.querySelectorAll(".overlay-modal").forEach(function (e) {
+              e.remove();
+            });
+            if (d.success) {
+              showToast(d.message);
+            } else {
+              showToast(d.error || "Ошибка");
+            }
+          });
       }
       function loadReports() {
         fetch("/api/admin/reports", { headers: adminHeaders() })
@@ -937,7 +1081,7 @@
       function renderAdminMapMarkers() {
         if (!adminMap) return;
         adminMap.geoObjects.removeAll();
-        fetch("/api/admin/benches", { headers: adminHeaders() })
+        fetch("/api/admin/benches", { headers: adminHeaders(), cache: "no-store" })
           .then(function (r) {
             return r.json();
           })
@@ -1129,6 +1273,12 @@
         ymaps.ready(function () {
           renderAdminMapMarkers();
         });
+      document.addEventListener("visibilitychange", function () {
+        if (!document.hidden && adminMap) {
+          renderAdminMapMarkers();
+          loadAll();
+        }
+      });
       checkAuth();
     </script>
   </body>

@@ -21,6 +21,9 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
     />
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta http-equiv="Pragma" content="no-cache" />
+    <meta http-equiv="Expires" content="0" />
     <title>Скамейки Твери</title>
     <!-- Иконки Font Awesome (галочки, сердечки, лупа и т.д.) -->
     <link
@@ -41,12 +44,17 @@
       флагом ymapsReady, чтобы не вызывать методы карты до готовности.
       apikey — ключ доступа к API Яндекса.
     -->
-    <script
-      src="https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=1523c569-fb40-448b-8a73-6e1a37b34216&loading=release"
-      type="text/javascript"
-      async
-      defer
-    ></script>
+    <script>
+      (function () {
+        var s = document.createElement("script");
+        s.src =
+          "https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=1523c569-fb40-448b-8a73-6e1a37b34216&_=" +
+          Date.now();
+        s.type = "text/javascript";
+        s.defer = true;
+        document.head.appendChild(s);
+      })();
+    </script>
     <style>
       /* =======================================================================
          БЛОК СТИЛЕЙ (CSS)
@@ -1511,12 +1519,13 @@
       // loadBenches(): загружает все активные скамейки (GET /api/benches),
       // очищает карту и расставляет метки. user_id передаётся, чтобы сервер
       // пометил, какие скамейки лайкнуты/в избранном у текущего пользователя.
-      function loadBenches() {
-        if (!mapInitialized || !myMap) return;
-        fetch(
-          "/api/benches?user_id=" +
-            (currentUser && currentUser.id ? currentUser.id : ""),
-        )
+       function loadBenches() {
+         if (!mapInitialized || !myMap) return;
+         fetch(
+           "/api/benches?user_id=" +
+             (currentUser && currentUser.id ? currentUser.id : ""),
+           { cache: "no-store" },
+         )
           .then(function (r) {
             return r.json();
           })
@@ -2325,7 +2334,7 @@
         }
       }
       function openTopUsers() {
-        fetch("/api/top-users")
+        fetch("/api/top-users", { cache: "no-store" })
           .then(function (r) {
             return r.json();
           })
@@ -2957,7 +2966,17 @@
           document.getElementById("mainApp").style.height = "";
         }
       });
-      checkAuth();
+       document.addEventListener("visibilitychange", function () {
+         if (!document.hidden) {
+           if (mapInitialized && myMap) {
+             refreshMap();
+           }
+           if (currentUser) {
+             updateNotifBadge();
+           }
+         }
+       });
+       checkAuth();
       // Инициализируем swipe-to-close для карточки скамейки
       setTimeout(function () {
         initBenchCardSwipe();

@@ -11,6 +11,7 @@ const path = require("path");
 const fs = require("fs");
 const multer = require("multer");
 const crypto = require("crypto");
+const sqlite3 = require("sqlite3").verbose();
 
 // ---- Configuration --------------------------------------------------------
 const app = express();
@@ -21,6 +22,14 @@ const D1_ACCOUNT_ID = process.env.D1_ACCOUNT_ID;
 const D1_DATABASE_ID = process.env.D1_DATABASE_ID;
 const D1_API_TOKEN = process.env.D1_API_TOKEN;
 
+const useD1 = !!(D1_ACCOUNT_ID && D1_DATABASE_ID && D1_API_TOKEN);
+
+if (!useD1) {
+  console.log("⚠️  D1 не настроен, используется локальная SQLite база (local.db)");
+} else {
+  console.log("✅ Используется Cloudflare D1");
+}
+
 // Reliability tuning
 const D1_RETRIES = 3; // retry attempts on transient failures
 const D1_RETRY_DELAY = 300; // base backoff (ms), exponential
@@ -28,20 +37,20 @@ const D1_TIMEOUT = 10000; // per-request fetch timeout (ms)
 const CACHE_TTL = 30000; // stats / top-users cache TTL (ms)
 const SESSION_CACHE_TTL = 300000; // in-memory session cache (ms)
 
-if (!D1_ACCOUNT_ID || !D1_DATABASE_ID || !D1_API_TOKEN) {
-  console.error("❌ Missing required D1 environment variables:");
-  console.error("   D1_ACCOUNT_ID:", D1_ACCOUNT_ID ? "✓" : "✗");
-  console.error("   D1_DATABASE_ID:", D1_DATABASE_ID ? "✓" : "✗");
-  console.error("   D1_API_TOKEN:", D1_API_TOKEN ? "✗" : "✓");
-  process.exit(1);
-}
-
-const D1_ENDPOINT = `https://api.cloudflare.com/client/v4/accounts/${D1_ACCOUNT_ID}/d1/database/${D1_DATABASE_ID}/query`;
+const D1_ENDPOINT = useD1
+  ? `https://api.cloudflare.com/client/v4/accounts/${D1_ACCOUNT_ID}/d1/database/${D1_DATABASE_ID}/query`
+  : null;
 
 // ---- Required directories -------------------------------------------------
 if (!fs.existsSync(__dirname + "/uploads"))
   fs.mkdirSync(__dirname + "/uploads");
 if (!fs.existsSync(__dirname + "/public")) fs.mkdirSync(__dirname + "/public");
+
+// ---- SQLite fallback ------------------------------------------------------
+let sqliteDb = null;
+if (!useD1) {
+  sqliteDb = new sqlite3.Database(path.join(__dirname, "local.db"));
+}
 
 // ============================================================================
 //  D1 Database Interface (with retry + timeout)
@@ -62,6 +71,16 @@ class D1TransientError extends Error {
 // Executes ONE SQL statement against D1 (no batching — D1 HTTP API runs a
 // single statement per call). Retries transient (network/timeout/5xx) errors.
 async function d1Query(sql, params = []) {
+  if (!useD1) {
+    return new Promise((resolve, reject) => {
+      sqliteDb.all(sql, params, (err, rows) => {
+        if (err) {
+          return reject(new D1SqlError("SQLite error: " + err.message));
+        }
+        resolve(rows || []);
+      });
+    });
+  }
   let lastErr;
   for (let attempt = 0; attempt <= D1_RETRIES; attempt++) {
     try {
@@ -353,6 +372,13 @@ app.use(express.json({ limit: "50mb" }));
 app.use("/uploads", express.static(__dirname + "/uploads"));
 app.use(express.static(__dirname + "/public"));
 
+app.use((req, res, next) => {
+  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+  next();
+});
+
 const storage = multer.diskStorage({
   destination: (req, file, cb) => cb(null, __dirname + "/uploads/"),
   filename: (req, file, cb) =>
@@ -374,11 +400,11 @@ async function initDatabase() {
 
   const createTables = [
     `CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      login TEXT UNIQUE, password TEXT, nickname TEXT,
+      id INTEGER PRIMARY KEY AUTOINCREMENT, login TEXT UNIQUE, password TEXT, nickname TEXT,
       reputation INTEGER DEFAULT 0, total_benches INTEGER DEFAULT 0,
       total_reviews_received INTEGER DEFAULT 0, theme TEXT DEFAULT 'dark',
       is_admin INTEGER DEFAULT 0, avatar TEXT, phone TEXT, email TEXT,
+      banned INTEGER DEFAULT 0, ban_reason TEXT,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP )`,
     `CREATE TABLE IF NOT EXISTS benches (
       id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT DEFAULT 'Скамейка',
@@ -421,6 +447,10 @@ async function initDatabase() {
   `CREATE TABLE IF NOT EXISTS review_reports (
       id INTEGER PRIMARY KEY AUTOINCREMENT, review_id INTEGER, user_id INTEGER,
       reason TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP )`,
+  `CREATE TABLE IF NOT EXISTS admin_messages (
+      id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL,
+      message TEXT NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      read INTEGER DEFAULT 0 )`,
 ];
 
    await execMultiple(createTables);
@@ -1276,6 +1306,68 @@ app.post("/api/admin/users/:id/admin", requireAdmin, async (req, res) => {
     res.json({ success: true });
   } catch (err) {
     console.error("Ошибка изменения прав админа:", err.message);
+    res.json({ success: false, error: "Ошибка сервера" });
+  }
+});
+
+// POST /api/admin/users/:id/ban
+app.post("/api/admin/users/:id/ban", requireAdmin, async (req, res) => {
+  const uid = parseInt(req.params.id);
+  const reason = (req.body.reason || "").trim();
+  const isBanned = req.body.is_banned ? 1 : 0;
+  try {
+    if (uid === req.user_id) {
+      return res.json({ success: false, error: "Нельзя забанить самого себя" });
+    }
+    const users = await q("SELECT id FROM users WHERE id=?", [uid]);
+    if (!users.length) {
+      return res.json({ success: false, error: "Пользователь не найден" });
+    }
+    await run(
+      "UPDATE users SET banned=?, ban_reason=? WHERE id=?",
+      [isBanned, isBanned ? reason : null, uid],
+    );
+    if (isBanned) {
+      await createUserNotice(
+        uid,
+        "Вы забанены: " + reason,
+        "error",
+        null,
+      );
+    }
+    res.json({
+      success: true,
+      message: isBanned ? "Пользователь забанен" : "Пользователь разбанен",
+    });
+  } catch (err) {
+    console.error("Ошибка изменения бана:", err.message);
+    res.json({ success: false, error: "Ошибка сервера" });
+  }
+});
+
+// POST /api/admin/users/:id/message
+app.post("/api/admin/users/:id/message", requireAdmin, async (req, res) => {
+  const uid = parseInt(req.params.id);
+  const message = (req.body.message || "").trim();
+  try {
+    if (!message) {
+      return res.json({ success: false, error: "Введите сообщение" });
+    }
+    if (uid === req.user_id) {
+      return res.json({ success: false, error: "Нельзя отправить себе сообщение" });
+    }
+    const users = await q("SELECT id FROM users WHERE id=?", [uid]);
+    if (!users.length) {
+      return res.json({ success: false, error: "Пользователь не найден" });
+    }
+    await run(
+      "INSERT INTO admin_messages(user_id, message) VALUES (?, ?)",
+      [uid, message],
+    );
+    await createUserNotice(uid, message, "admin", null);
+    res.json({ success: true, message: "Сообщение отправлено" });
+  } catch (err) {
+    console.error("Ошибка отправки сообщения:", err.message);
     res.json({ success: false, error: "Ошибка сервера" });
   }
 });
