@@ -11,7 +11,6 @@ const path = require("path");
 const fs = require("fs");
 const multer = require("multer");
 const crypto = require("crypto");
-const sqlite3 = require("sqlite3").verbose();
 
 // ---- Configuration --------------------------------------------------------
 const app = express();
@@ -22,14 +21,6 @@ const D1_ACCOUNT_ID = process.env.D1_ACCOUNT_ID;
 const D1_DATABASE_ID = process.env.D1_DATABASE_ID;
 const D1_API_TOKEN = process.env.D1_API_TOKEN;
 
-const useD1 = !!(D1_ACCOUNT_ID && D1_DATABASE_ID && D1_API_TOKEN);
-
-if (!useD1) {
-  console.log("⚠️  D1 не настроен, используется локальная SQLite база (local.db)");
-} else {
-  console.log("✅ Используется Cloudflare D1");
-}
-
 // Reliability tuning
 const D1_RETRIES = 3; // retry attempts on transient failures
 const D1_RETRY_DELAY = 300; // base backoff (ms), exponential
@@ -37,20 +28,20 @@ const D1_TIMEOUT = 10000; // per-request fetch timeout (ms)
 const CACHE_TTL = 30000; // stats / top-users cache TTL (ms)
 const SESSION_CACHE_TTL = 300000; // in-memory session cache (ms)
 
-const D1_ENDPOINT = useD1
-  ? `https://api.cloudflare.com/client/v4/accounts/${D1_ACCOUNT_ID}/d1/database/${D1_DATABASE_ID}/query`
-  : null;
+if (!D1_ACCOUNT_ID || !D1_DATABASE_ID || !D1_API_TOKEN) {
+  console.error("❌ Missing required D1 environment variables:");
+  console.error("   D1_ACCOUNT_ID:", D1_ACCOUNT_ID ? "✓" : "✗");
+  console.error("   D1_DATABASE_ID:", D1_DATABASE_ID ? "✓" : "✗");
+  console.error("   D1_API_TOKEN:", D1_API_TOKEN ? "✓" : "✗");
+  process.exit(1);
+}
+
+const D1_ENDPOINT = `https://api.cloudflare.com/client/v4/accounts/${D1_ACCOUNT_ID}/d1/database/${D1_DATABASE_ID}/query`;
 
 // ---- Required directories -------------------------------------------------
 if (!fs.existsSync(__dirname + "/uploads"))
   fs.mkdirSync(__dirname + "/uploads");
 if (!fs.existsSync(__dirname + "/public")) fs.mkdirSync(__dirname + "/public");
-
-// ---- SQLite fallback ------------------------------------------------------
-let sqliteDb = null;
-if (!useD1) {
-  sqliteDb = new sqlite3.Database(path.join(__dirname, "local.db"));
-}
 
 // ============================================================================
 //  D1 Database Interface (with retry + timeout)
@@ -68,19 +59,9 @@ class D1TransientError extends Error {
   }
 }
 
-// Executes ONE SQL statement against D1 (no batching — D1 HTTP API runs a
-// single statement per call). Retries transient (network/timeout/5xx) errors.
+// Executes ONE SQL statement against D1 (D1 HTTP API runs a single statement
+// per call). Retries transient (network/timeout/5xx) errors.
 async function d1Query(sql, params = []) {
-  if (!useD1) {
-    return new Promise((resolve, reject) => {
-      sqliteDb.all(sql, params, (err, rows) => {
-        if (err) {
-          return reject(new D1SqlError("SQLite error: " + err.message));
-        }
-        resolve(rows || []);
-      });
-    });
-  }
   let lastErr;
   for (let attempt = 0; attempt <= D1_RETRIES; attempt++) {
     try {
