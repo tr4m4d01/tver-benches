@@ -616,6 +616,29 @@ app.get("/api/user/:id", async (req, res) => {
   }
 });
 
+// GET /api/me — проверка текущей сессии (валидирует токен доступа).
+// Клиент вызывает при старте, чтобы убедиться, что сохранённый аккаунт и
+// токен действительны. requireAuth вернёт {success:false, "Сессия истекла"},
+// если токен есть, а сессия — {success:false, "Пользователь не найден"},
+// если пользователь удалён. В обоих случаях клиент показывает экран входа.
+app.get("/api/me", requireAuth, async (req, res) => {
+  try {
+    const user = await q(
+      "SELECT id, login, nickname, reputation, total_benches, total_reviews_received, theme, is_admin, avatar, phone, email, created_at FROM users WHERE id=?",
+      [req.user_id],
+    );
+    if (!user.length) {
+      // Пользователь удалён — сессия больше не действительна
+      await run("DELETE FROM sessions WHERE user_id=?", [req.user_id]).catch(() => {});
+      return res.json({ success: false, error: "Пользователь не найден" });
+    }
+    res.json({ success: true, user: user[0] });
+  } catch (err) {
+    console.error("Ошибка проверки сессии:", err.message);
+    res.json({ success: false, error: "Ошибка сервера" });
+  }
+});
+
 // POST /api/user/:id
 app.post("/api/user/:id", requireAuth, upload.none(), async (req, res) => {
   const uid = parseInt(req.params.id);

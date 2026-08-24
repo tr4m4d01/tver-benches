@@ -1242,9 +1242,14 @@
         document.getElementById(id).classList.remove("active");
         // Очистка при закрытии модального окна добавления скамейки
         if (id === "addModal") {
-          if (dragPlacemark && myMap) {
-            myMap.removeLayer(dragPlacemark);
-            dragPlacemark = null;
+          // Отключаем перетаскивание маркера геолокации и сбрасываем обработчики
+          if (userPlacemark && userPlacemark.dragging) {
+            userPlacemark.dragging.disable();
+          }
+          if (userPlacemark && userPlacemark._benchMoveHandler) {
+            userPlacemark.off("move", userPlacemark._benchMoveHandler);
+            userPlacemark.off("dragend", userPlacemark._benchMoveHandler);
+            userPlacemark._benchMoveHandler = null;
           }
           var overlay = document.getElementById("markerDragOverlay");
           if (overlay) overlay.style.display = "none";
@@ -1444,7 +1449,7 @@
               localStorage.setItem("tver_user", JSON.stringify(currentUser));
               document.getElementById("authScreen").classList.add("hidden");
               document.getElementById("mainApp").classList.add("active");
-              loadBenches();
+              refreshMap();
               // Refresh notification badge after login
               setTimeout(function () {
                 updateNotifBadge();
@@ -1454,18 +1459,65 @@
             }
           });
       }
-      // checkAuth(): при загрузке страницы проверяет, есть ли сохранённый
-      // пользователь в localStorage. Если да — сразу открывает карту (не надо
-      // входить заново), иначе остаётся экран входа.
+      // checkAuth(): при загрузке страницы проверяет сохранённый в localStorage
+      // аккаунт и VERIFIES его сессию на сервере (GET /api/me). Если токен
+      // недействителен/истёк/пользователь удалён — считается, что сессия не
+      // валидна: очищаем localStorage и показываем экран входа. Если сессия
+      // валидна — синхронизируем данные пользователя и открываем карту.
       function checkAuth() {
-         var s = localStorage.getItem("tver_user");
-         if (s) {
-           try { currentUser = JSON.parse(s); } catch (e) { currentUser = null; }
-         }
-         document.getElementById("authScreen").classList.add("hidden");
-         document.getElementById("mainApp").classList.add("active");
-         refreshMap();
-       }
+        var s = localStorage.getItem("tver_user");
+        if (s) {
+          try {
+            currentUser = JSON.parse(s);
+          } catch (e) {
+            currentUser = null;
+          }
+        }
+        // Нет сохранённого токена — показываем экран входа.
+        if (!currentUser || !currentUser.token) {
+          showLoginScreen();
+          return;
+        }
+        // Проверяем сессию на сервере: если токен/пользователь недействительны —
+        // считаем пользователя неавторизованным и показываем вход.
+        fetch("/api/me", { headers: authHeaders() })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (d) {
+            if (d.success && d.user) {
+              var token = currentUser.token;
+              currentUser = d.user;
+              currentUser.token = token;
+              currentUser.id = currentUser.id || d.user.id;
+              localStorage.setItem("tver_user", JSON.stringify(currentUser));
+              document.getElementById("authScreen").classList.add("hidden");
+              document.getElementById("mainApp").classList.add("active");
+              refreshMap();
+            } else {
+              invalidateSession();
+            }
+          })
+          .catch(function () {
+            // Ошибка сети — лучше показать вход, чем сломанную карту
+            invalidateSession();
+          });
+      }
+      // invalidateSession(): сбрасывает авторизацию (чистит localStorage)
+      // и возвращает пользователя на экран входа.
+      function invalidateSession() {
+        currentUser = null;
+        localStorage.removeItem("tver_user");
+        showLoginScreen();
+      }
+      // showLoginScreen(): закрывает главное приложение и показывает экран входа.
+      function showLoginScreen() {
+        var auth = document.getElementById("authScreen");
+        var app = document.getElementById("mainApp");
+        if (auth) auth.classList.remove("hidden");
+        if (app) app.classList.remove("active");
+        hidePreloader();
+      }
       // refreshMap(): если карта уже инициализирована (но контейнер был скрыт),
       // перестраиваем её (invalidateSize); иначе инициализируем карту.
       function refreshMap() {
@@ -1475,6 +1527,7 @@
         }
         setTimeout(function () {
           if (myMap) myMap.invalidateSize();
+          loadBenches();
         }, 100);
       }
       // findMe(): запрашивает геопозицию браузера (GPS/WiFi). При успехе
@@ -2161,34 +2214,38 @@
         document.getElementById("addModalContent").innerHTML =
           '<div class="form-group"><label>Фото (обязательно!)</label><input type="file" id="modalPhotoInput" accept="image/*" capture="environment" multiple></div><div id="photoPreview" style="display:flex;gap:10px;flex-wrap:wrap"></div><div class="form-group"><label>Описание</label><textarea id="modalBenchDesc" rows="3"></textarea></div><div class="form-group" style="text-align:center"><i class="fa-solid fa-map-pin" style="color:var(--primary);font-size:1.5em"></i><div id="benchCoords" style="font-size:12px;color:var(--gray);margin-top:5px">Координаты: загружаются...</div></div><button class="btn" onclick="saveBench()">Сохранить</button>';
         document.getElementById("addModal").classList.add("active");
-        // Show draggable marker overlay on the map
-        if (myMap) {
-          if (dragPlacemark) myMap.removeLayer(dragPlacemark);
-          dragPlacemark = L.marker(
-            [userPosition.lat, userPosition.lng],
-            { icon: createUserIcon(), draggable: true },
-          ).addTo(myMap);
-          if (myMap) myMap.setView([userPosition.lat, userPosition.lng], 16);
-          var coordsEl = document.getElementById("benchCoords");
-          if (coordsEl) {
-            coordsEl.textContent =
-              "Координаты: " +
-              userPosition.lat.toFixed(5) +
-              ", " +
-              userPosition.lng.toFixed(5);
-          }
-          dragPlacemark.on("dragend", function () {
-            var c = dragPlacemark.getLatLng();
+        // Делаем маркер геолокации (userPlacemark) перетаскиваемым, чтобы
+        // пользователь мог точно указать местоположение скамейки. Координаты
+        // синхронизируются в userPosition — saveBench() сохраняет именно их.
+        var coordsEl = document.getElementById("benchCoords");
+        function syncBenchCoords() {
+          if (!coordsEl || !userPosition) return;
+          coordsEl.textContent =
+            "Координаты: " +
+            userPosition.lat.toFixed(5) +
+            ", " +
+            userPosition.lng.toFixed(5);
+        }
+        if (myMap && userPlacemark && userPlacemark.dragging) {
+          // Центрируем карту на маркере и включаем перетаскивание
+          myMap.setView([userPosition.lat, userPosition.lng], 16);
+          userPlacemark.dragging.enable({ autoPan: true });
+          // Обновляем координаты «на лету» во время и после перетаскивания
+          userPlacemark._benchMoveHandler = function () {
+            var c = userPlacemark.getLatLng();
             userPosition.lat = c.lat;
             userPosition.lng = c.lng;
-            if (coordsEl) {
-              coordsEl.textContent =
-                "Координаты: " + c.lat.toFixed(5) + ", " + c.lng.toFixed(5);
-            }
-          });
+            syncBenchCoords();
+          };
+          userPlacemark.on("move", userPlacemark._benchMoveHandler);
+          userPlacemark.on("dragend", userPlacemark._benchMoveHandler);
+          syncBenchCoords();
+        } else if (coordsEl) {
+          syncBenchCoords();
         }
+        // Центральная «точка падения» больше не нужна: маркер перетаскиваем сами
         var overlay = document.getElementById("markerDragOverlay");
-        if (overlay) overlay.style.display = "flex";
+        if (overlay) overlay.style.display = "none";
         document
           .getElementById("modalPhotoInput")
           .addEventListener("change", function (e) {
