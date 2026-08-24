@@ -4,7 +4,7 @@
   index.html — главная страница приложения «Скамейки Твери» (клиентская часть)
   ----------------------------------------------------------------------------
   Что внутри:
-    • <head>      — подключение шрифтов, иконок Font Awesome и скрипта Яндекс.Карт
+    • <head>      — подключение шрифтов, иконок Font Awesome и карты Leaflet (OSM)
     • <style>     — весь дизайн (CSS) приложения
     • <body>      — разметка экранов: вход, карта, модальные окна
     • <script>    — вся логика: карта, поиск, авторизация, отзывы, избранное и т.д.
@@ -37,24 +37,12 @@
       href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap"
       rel="stylesheet"
     />
-    <!--
-      Скрипт Яндекс.Карт (версия 2.1). Загружается асинхронно (async defer),
-      поэтому глобальный объект `ymaps` появляется позже. Вся инициализация
-      карты происходит внутри ymaps.ready(...) в конце скрипта и защищена
-      флагом ymapsReady, чтобы не вызывать методы карты до готовности.
-      apikey — ключ доступа к API Яндекса.
-    -->
-    <script>
-      (function () {
-        var s = document.createElement("script");
-        s.src =
-          "https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=1523c569-fb40-448b-8a73-6e1a37b34216&_=" +
-          Date.now();
-        s.type = "text/javascript";
-        s.defer = true;
-        document.head.appendChild(s);
-      })();
-    </script>
+    <!-- Leaflet (OpenStreetMap) — CSS и скрипт карты -->
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <style>
       /* =======================================================================
          БЛОК СТИЛЕЙ (CSS)
@@ -250,7 +238,7 @@
         display: flex;
       }
       #map {
-        /* Контейнер Яндекс.Карты: занимает весь экран под mainApp */
+        /* Контейнер карты Leaflet: занимает весь экран под mainApp */
         position: absolute;
         top: 0;
         left: 0;
@@ -690,7 +678,7 @@
       #backToTop.show {
         display: flex;
       }
-      /* Индикатор загрузки карты (показывается пока ymaps готовится) */
+      /* Индикатор загрузки карты (показывается пока карта готовится) */
       #mapPreloader {
         position: absolute;
         top: 0;
@@ -969,12 +957,12 @@
     <!-- ОСНОВНОЙ ЭКРАН ПРИЛОЖЕНИЯ (карта + интерфейс).
          Становится видимым после успешного входа (класс .active). -->
     <div id="mainApp">
-      <!-- Индикатор загрузки карты (показывается пока ymaps готовится) -->
+      <!-- Индикатор загрузки карты (показывается пока карта готовится) -->
       <div id="mapPreloader">
         <i class="fa-solid fa-spinner fa-spin"></i>
         <div class="loading-text">Загрузка карты...</div>
       </div>
-      <!-- Контейнер Яндекс.Карты (в него монтируется карта из JS) -->
+      <!-- Контейнер карты Leaflet (в него монтируется карта из JS) -->
       <div id="map"></div>
       <!-- Плавающая строка поиска сверху -->
       <div class="search-container">
@@ -1120,7 +1108,7 @@
       // ---- Глобальные переменные (доступны из всех функций) --------------
       // currentUser  — данные вошедшего пользователя (или null, если не вошёл)
       // userPosition — координаты пользователя {lat, lng}, полученные от GPS
-      // myMap        — объект карты Яндекс (создаётся в ymaps.ready)
+      // myMap        — объект карты Leaflet (создаётся в initMap)
       // userPlacemark— метка текущего местоположения на карте
       // allBenches   — массив всех загруженных скамеек (для поиска/фильтрации)
       // selectedBench— скамейка, открытая сейчас в нижней карточке
@@ -1255,7 +1243,7 @@
         // Очистка при закрытии модального окна добавления скамейки
         if (id === "addModal") {
           if (dragPlacemark && myMap) {
-            myMap.geoObjects.remove(dragPlacemark);
+            myMap.removeLayer(dragPlacemark);
             dragPlacemark = null;
           }
           var overlay = document.getElementById("markerDragOverlay");
@@ -1277,38 +1265,33 @@
         });
       });
 
-      // ---- РАБОТА С ЯНДЕКС.КАРТАМИ ----------------------------------------
-      // createBenchIcon(): возвращает настройки метки для скамейки.
+      // ---- РАБОТА С КАРТОЙ (LEAFLET / OSM) ----------------------------------
+      // createBenchIcon(): возвращает Leaflet-иконку для скамейки.
       // Иконка задана как готовая картинка (SVG-скамейка в base64),
       // а не стандартная булавка, чтобы скамейки выглядели узнаваемо.
       function createBenchIcon() {
-        return {
-          iconLayout: "default#image",
-          iconImageHref:
+        return L.icon({
+          iconUrl:
             "data:image/svg+xml;base64," +
             btoa(
               '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect x="8" y="40" width="48" height="5" rx="2.5" fill="#5b75f8"/><rect x="12" y="18" width="40" height="5" rx="2.5" fill="#7c8ffb"/><rect x="10" y="18" width="5" height="27" rx="2.5" fill="#3f57d6"/><rect x="49" y="18" width="5" height="27" rx="2.5" fill="#3f57d6"/><rect x="8" y="45" width="5" height="14" rx="2.5" fill="#3f57d6"/><rect x="51" y="45" width="5" height="14" rx="2.5" fill="#3f57d6"/></svg>',
             ),
-          iconImageSize: [40, 40],
-          iconImageOffset: [-20, -40], // смещение, чтобы «носик» метки был в точке
-        };
+          iconSize: [40, 40],
+          iconAnchor: [20, 40],
+        });
       }
       // createUserIcon(): метка текущего местоположения пользователя (синяя булавка)
       function createUserIcon() {
-        return {
-          iconLayout: "default#image",
-          iconImageHref:
+        return L.icon({
+          iconUrl:
             "data:image/svg+xml;base64," +
             btoa(
               '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><path d="M32 2 C18 14 8 26 8 40 C8 53 18 62 32 62 C46 62 56 53 56 40 C56 26 46 14 32 2 Z" fill="#5b75f8" stroke="white" stroke-width="2"/><circle cx="32" cy="38" r="13" fill="white"/><circle cx="32" cy="38" r="7" fill="#5b75f8"/></svg>',
             ),
-          iconImageSize: [45, 45],
-          iconImageOffset: [-22, -45],
-        };
+          iconSize: [45, 45],
+          iconAnchor: [22, 45],
+        });
       }
-      // ymaps.ready(...) — запускается, когда карта полностью загрузилась.
-      // Создаём объект карты в контейнере #map, центрируем на Твери (zoom 13),
-      // скрываем прелоудер и сразу загружаем скамейки.
       var hidePreloader = function () {
         var pre = document.getElementById("mapPreloader");
         if (pre) {
@@ -1318,20 +1301,25 @@
           }, 300);
         }
       };
-      ymaps.ready(function () {
-         mapInitialized = true;
-         myMap = new ymaps.Map("map", {
-           center: [56.8587, 35.9176],
-           zoom: 13,
-           controls: [],
-         });
-         try { myMap.container.fit(); } catch (e) {}
-         hidePreloader();
-         loadBenches();
-        
-         // Try to find user location after map is ready
-         findMe();
- });
+      // initMap(): создаёт карту Leaflet в контейнере #map, центрирует на
+      // Твери (zoom 13), скрываем прелоудер и сразу загружаем скамейки.
+      function initMap() {
+        if (mapInitialized || !window.L) return;
+        mapInitialized = true;
+        myMap = L.map("map").setView([56.8587, 35.9176], 13);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 18,
+          attribution:
+            '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        }).addTo(myMap);
+        hidePreloader();
+        loadBenches();
+        setTimeout(function () {
+          if (myMap) myMap.invalidateSize();
+        }, 300);
+        // Try to find user location after map is ready
+        findMe();
+      }
 
       // ---- ПЕРЕКЛЮЧЕНИЕ ФОРМ ВХОДА/РЕГИСТРАЦИИ ---------------------------
       // showLogin(): показывает блок входа, прячет регистрацию
@@ -1479,16 +1467,15 @@
          refreshMap();
        }
       // refreshMap(): если карта уже инициализирована (но контейнер был скрыт),
-      // заставляем её перестроиться. Если ещё не готова — ymaps.ready сделает это.
+      // перестраиваем её (invalidateSize); иначе инициализируем карту.
       function refreshMap() {
-        if (myMap && mapInitialized) {
-          setTimeout(function () {
-            if (myMap && typeof myMap.container !== "undefined" && myMap.container.fit) {
-              try { myMap.container.fit(); } catch (e) {}
-            }
-            loadBenches();
-          }, 300);
+        if (!mapInitialized) {
+          initMap();
+          return;
         }
+        setTimeout(function () {
+          if (myMap) myMap.invalidateSize();
+        }, 100);
       }
       // findMe(): запрашивает геопозицию браузера (GPS/WiFi). При успехе
       // сохраняет координаты в userPosition и ставит синюю метку на карте,
@@ -1501,14 +1488,12 @@
                 lat: pos.coords.latitude,
                 lng: pos.coords.longitude,
               };
-              if (userPlacemark) myMap.geoObjects.remove(userPlacemark);
-              userPlacemark = new ymaps.Placemark(
+              if (userPlacemark) myMap.removeLayer(userPlacemark);
+              userPlacemark = L.marker(
                 [userPosition.lat, userPosition.lng],
-                {},
-                createUserIcon(),
-              );
-              myMap.geoObjects.add(userPlacemark);
-              myMap.setCenter([userPosition.lat, userPosition.lng], 16);
+                { icon: createUserIcon() },
+              ).addTo(myMap);
+              myMap.setView([userPosition.lat, userPosition.lng], 16);
             },
             function () {
               showToast("Не удалось определить геопозицию");
@@ -1532,20 +1517,23 @@
           .then(function (d) {
             if (!d.success) return;
             allBenches = d.benches;
-            myMap.geoObjects.removeAll();
-            if (userPlacemark) {
-              myMap.geoObjects.add(userPlacemark);
-            }
+            myMap.eachLayer(function (layer) {
+              if (
+                layer instanceof L.Marker &&
+                layer !== userPlacemark &&
+                layer !== dragPlacemark
+              ) {
+                myMap.removeLayer(layer);
+              }
+            });
             d.benches.forEach(function (b) {
-              var pm = new ymaps.Placemark(
+              var pm = L.marker(
                 [b.latitude, b.longitude],
-                {},
-                createBenchIcon(),
-              );
-              pm.events.add("click", function () {
+                { icon: createBenchIcon() },
+              ).addTo(myMap);
+              pm.on("click", function () {
                 showBenchCard(b);
               });
-              myMap.geoObjects.add(pm);
             });
           });
       }
@@ -1630,7 +1618,7 @@
           b.id +
           ')"><i class="fa-solid fa-flag"></i></button></div>';
         document.getElementById("benchCard").classList.add("active");
-        if (myMap) myMap.setCenter([b.latitude, b.longitude], 17);
+        if (myMap) myMap.setView([b.latitude, b.longitude], 17);
       }
       // ---- Bench card swipe-to-close -----------------------------------------
       // Закрытие карточки скамейки: на мобильных — свайп вниз по полоске
@@ -1688,16 +1676,16 @@
           showToast("Определите гео");
           return;
         }
+        // Открываем маршрут во внешнем карте (Google Maps)
         window.open(
-          "https://yandex.ru/maps/?rtext=" +
+          "https://www.google.com/maps/dir/?api=1&origin=" +
             userPosition.lat +
             "," +
             userPosition.lng +
-            "~" +
+            "&destination=" +
             selectedBench.latitude +
             "," +
-            selectedBench.longitude +
-            "&rtt=pd",
+            selectedBench.longitude,
           "_blank",
         );
       }
@@ -1960,7 +1948,7 @@
       }
       function searchByAddress() {
         clearTimeout(searchTimeout);
-        if (typeof ymaps === "undefined" || !ymaps.geocode) {
+        if (!mapInitialized || !myMap) {
           var errEl = document.getElementById("searchError");
           if (errEl) {
             errEl.textContent = "Карта ещё не загружена. Подождите...";
@@ -1980,11 +1968,15 @@
         addrList.innerHTML =
           '<p style="padding:15px;color:var(--gray)">Поиск ближайших скамеек...</p>';
         addrList.style.display = "block";
-        ymaps
-          .geocode("Тверь, " + q, { results: 1 })
-          .then(function (res) {
-            var firstResult = res.geoObjects.get(0);
-            if (!firstResult) {
+        fetch(
+          "https://nominatim.openstreetmap.org/search?format=json&q=" +
+            encodeURIComponent("Тверь, " + q)
+        )
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (data) {
+            if (!data.length) {
               addrList.innerHTML = "";
               if (errEl) {
                 errEl.textContent = "Адрес не найден. Проверьте написание.";
@@ -1992,7 +1984,7 @@
               }
               return;
             }
-            var c = firstResult.geometry.getCoordinates();
+            var c = [parseFloat(data[0].lat), parseFloat(data[0].lon)];
             var results = [];
             allBenches.forEach(function (b) {
               var dd = calcDist(c[0], c[1], b.latitude, b.longitude);
@@ -2037,7 +2029,7 @@
                 );
               })
               .join("");
-            if (myMap) myMap.setCenter([c[0], c[1]], 14);
+            if (myMap) myMap.setView([c[0], c[1]], 14);
           })
           .catch(function () {
             addrList.innerHTML = "";
@@ -2053,7 +2045,7 @@
         });
         if (bench) {
           document.getElementById("addressResults").style.display = "none";
-          if (myMap) myMap.setCenter([bench.latitude, bench.longitude], 17);
+          if (myMap) myMap.setView([bench.latitude, bench.longitude], 17);
           showBenchCard(bench);
         }
       }
@@ -2073,13 +2065,17 @@
           list.innerHTML =
             '<p style="padding:14px;color:var(--gray)">Поиск...</p>';
           list.classList.add("active");
-          ymaps
-            .geocode("Тверь, " + q, { results: 10 })
-            .then(function (res) {
+          fetch(
+            "https://nominatim.openstreetmap.org/search?format=json&q=" +
+              encodeURIComponent("Тверь, " + q)
+          )
+            .then(function (r) {
+              return r.json();
+            })
+            .then(function (data) {
               searchResults = [];
-              var firstResult = res.geoObjects.get(0);
-              if (firstResult) {
-                var c = firstResult.geometry.getCoordinates();
+              if (data.length) {
+                var c = [parseFloat(data[0].lat), parseFloat(data[0].lon)];
                 allBenches.forEach(function (b) {
                   var dd = calcDist(c[0], c[1], b.latitude, b.longitude);
                   if (dd <= 5) {
@@ -2124,7 +2120,7 @@
           d.onclick = function () {
             l.classList.remove("active");
             if (myMap)
-              myMap.setCenter([r.bench.latitude, r.bench.longitude], 17);
+              myMap.setView([r.bench.latitude, r.bench.longitude], 17);
             showBenchCard(r.bench);
           };
           l.appendChild(d);
@@ -2167,24 +2163,12 @@
         document.getElementById("addModal").classList.add("active");
         // Show draggable marker overlay on the map
         if (myMap) {
-          if (dragPlacemark) myMap.geoObjects.remove(dragPlacemark);
-          dragPlacemark = new ymaps.Placemark(
+          if (dragPlacemark) myMap.removeLayer(dragPlacemark);
+          dragPlacemark = L.marker(
             [userPosition.lat, userPosition.lng],
-            {},
-            {
-              draggable: true,
-              iconLayout: "default#image",
-              iconImageHref:
-                "data:image/svg+xml;base64," +
-                btoa(
-                  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><path d="M32 2 C18 14 8 26 8 40 C8 53 18 62 32 62 C46 62 56 53 56 40 C56 26 46 14 32 2 Z" fill="#5b75f8" stroke="white" stroke-width="2"/><circle cx="32" cy="38" r="13" fill="white"/><circle cx="32" cy="38" r="7" fill="#5b75f8"/></svg>',
-                ),
-              iconImageSize: [45, 45],
-              iconImageOffset: [-22, -45],
-            },
-          );
-          myMap.geoObjects.add(dragPlacemark);
-          myMap.setCenter([userPosition.lat, userPosition.lng], 16);
+            { icon: createUserIcon(), draggable: true },
+          ).addTo(myMap);
+          if (myMap) myMap.setView([userPosition.lat, userPosition.lng], 16);
           var coordsEl = document.getElementById("benchCoords");
           if (coordsEl) {
             coordsEl.textContent =
@@ -2193,13 +2177,13 @@
               ", " +
               userPosition.lng.toFixed(5);
           }
-          dragPlacemark.events.add("dragend", function () {
-            var c = dragPlacemark.geometry.getCoordinates();
-            userPosition.lat = c[0];
-            userPosition.lng = c[1];
+          dragPlacemark.on("dragend", function () {
+            var c = dragPlacemark.getLatLng();
+            userPosition.lat = c.lat;
+            userPosition.lng = c.lng;
             if (coordsEl) {
               coordsEl.textContent =
-                "Координаты: " + c[0].toFixed(5) + ", " + c[1].toFixed(5);
+                "Координаты: " + c.lat.toFixed(5) + ", " + c.lng.toFixed(5);
             }
           });
         }
@@ -2320,7 +2304,7 @@
       function focusBench(lat, lng) {
         closeModal("nearbyModal");
         closeModal("profileModal");
-        myMap.setCenter([lat, lng], 18);
+        myMap.setView([lat, lng], 18);
       }
       function focusFavBench(benchId) {
         var bench = allBenches.find(function (b) {

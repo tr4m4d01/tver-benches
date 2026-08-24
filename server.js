@@ -354,7 +354,10 @@ app.use("/uploads", express.static(__dirname + "/uploads"));
 app.use(express.static(__dirname + "/public"));
 
 app.use((req, res, next) => {
-  res.setHeader("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
+  res.setHeader(
+    "Cache-Control",
+    "no-store, no-cache, must-revalidate, proxy-revalidate",
+  );
   res.setHeader("Pragma", "no-cache");
   res.setHeader("Expires", "0");
   next();
@@ -417,68 +420,71 @@ async function initDatabase() {
     `CREATE TABLE IF NOT EXISTS sessions (
       id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, token TEXT UNIQUE,
       expires_at INTEGER, created_at DATETIME DEFAULT CURRENT_TIMESTAMP )`,
-  `CREATE TABLE IF NOT EXISTS notifications (
+    `CREATE TABLE IF NOT EXISTS notifications (
       id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, message TEXT,
       type TEXT DEFAULT 'info', read INTEGER DEFAULT 0,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP )`,
-  `CREATE TABLE IF NOT EXISTS user_notice (
+    `CREATE TABLE IF NOT EXISTS user_notice (
       id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, message TEXT,
       type TEXT DEFAULT 'info', read INTEGER DEFAULT 0, related_id INTEGER,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP )`,
-  `CREATE TABLE IF NOT EXISTS review_reports (
+    `CREATE TABLE IF NOT EXISTS review_reports (
       id INTEGER PRIMARY KEY AUTOINCREMENT, review_id INTEGER, user_id INTEGER,
       reason TEXT, created_at DATETIME DEFAULT CURRENT_TIMESTAMP )`,
-  `CREATE TABLE IF NOT EXISTS admin_messages (
+    `CREATE TABLE IF NOT EXISTS admin_messages (
       id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER NOT NULL,
       message TEXT NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       read INTEGER DEFAULT 0 )`,
-];
+  ];
 
-   await execMultiple(createTables);
-   console.log("База данных инициализирована");
+  await execMultiple(createTables);
+  console.log("База данных инициализирована");
 
-   const cols = await q(`PRAGMA table_info(notifications)`);
-   const hasCol = cols.some((c) => c.name === "related_id");
-   if (!hasCol) {
-     await run(`ALTER TABLE notifications ADD COLUMN related_id INTEGER DEFAULT NULL`);
-     console.log("Добавлена колонка related_id в notifications");
-   }
+  const cols = await q(`PRAGMA table_info(notifications)`);
+  const hasCol = cols.some((c) => c.name === "related_id");
+  if (!hasCol) {
+    await run(
+      `ALTER TABLE notifications ADD COLUMN related_id INTEGER DEFAULT NULL`,
+    );
+    console.log("Добавлена колонка related_id в notifications");
+  }
 
-   const ucols = await q(`PRAGMA table_info(users)`);
-   if (!ucols.some((c) => c.name === "banned")) {
-     await run(`ALTER TABLE users ADD COLUMN banned INTEGER DEFAULT 0`);
-     console.log("Добавлена колонка banned в users");
-   }
-   if (!ucols.some((c) => c.name === "ban_reason")) {
-     await run(`ALTER TABLE users ADD COLUMN ban_reason TEXT DEFAULT NULL`);
-     console.log("Добавлена колонка ban_reason в users");
-   }
- }
+  const ucols = await q(`PRAGMA table_info(users)`);
+  if (!ucols.some((c) => c.name === "banned")) {
+    await run(`ALTER TABLE users ADD COLUMN banned INTEGER DEFAULT 0`);
+    console.log("Добавлена колонка banned в users");
+  }
+  if (!ucols.some((c) => c.name === "ban_reason")) {
+    await run(`ALTER TABLE users ADD COLUMN ban_reason TEXT DEFAULT NULL`);
+    console.log("Добавлена колонка ban_reason в users");
+  }
+}
 
 // ============================================================================
 //  Notification helpers
 // ============================================================================
 async function createNotification(userId, message, type, relatedId = null) {
-   try {
-     if (type === "admin") {
-       await run(
-         "INSERT INTO notifications(user_id, message, type, related_id) VALUES (NULL, ?, ?, ?)",
-         [message, type || "info", relatedId],
-       );
-     } else if (userId) {
-       await run(
-         "INSERT INTO notifications(user_id, message, type, related_id) VALUES (?, ?, ?, ?)",
-         [userId, message, type || "info", relatedId],
-       );
-     } else {
-       await run("INSERT INTO notifications(message, type, related_id) VALUES (?, ?, ?)",
-         [message, type || "info", relatedId],
-       );
-     }
-   } catch (err) {
-     console.error("Ошибка создания уведомления:", err.message);
-   }
- }
+  try {
+    if (type === "admin") {
+      await run(
+        "INSERT INTO notifications(user_id, message, type, related_id) VALUES (NULL, ?, ?, ?)",
+        [message, type || "info", relatedId],
+      );
+    } else if (userId) {
+      await run(
+        "INSERT INTO notifications(user_id, message, type, related_id) VALUES (?, ?, ?, ?)",
+        [userId, message, type || "info", relatedId],
+      );
+    } else {
+      await run(
+        "INSERT INTO notifications(message, type, related_id) VALUES (?, ?, ?)",
+        [message, type || "info", relatedId],
+      );
+    }
+  } catch (err) {
+    console.error("Ошибка создания уведомления:", err.message);
+  }
+}
 
 async function createUserNotice(userId, message, type, relatedId) {
   try {
@@ -1245,7 +1251,10 @@ app.post("/api/admin/benches/:id/comment", requireAdmin, async (req, res) => {
     const bench = await q("SELECT id FROM benches WHERE id=?", [benchId]);
     if (!bench.length)
       return res.json({ success: false, error: "Скамейка не найдена" });
-    await run("UPDATE benches SET admin_comment=? WHERE id=?", [comment, benchId]);
+    await run("UPDATE benches SET admin_comment=? WHERE id=?", [
+      comment,
+      benchId,
+    ]);
     res.json({ success: true });
   } catch (err) {
     console.error("Ошибка сохранения комментария:", err.message);
@@ -1304,17 +1313,13 @@ app.post("/api/admin/users/:id/ban", requireAdmin, async (req, res) => {
     if (!users.length) {
       return res.json({ success: false, error: "Пользователь не найден" });
     }
-    await run(
-      "UPDATE users SET banned=?, ban_reason=? WHERE id=?",
-      [isBanned, isBanned ? reason : null, uid],
-    );
+    await run("UPDATE users SET banned=?, ban_reason=? WHERE id=?", [
+      isBanned,
+      isBanned ? reason : null,
+      uid,
+    ]);
     if (isBanned) {
-      await createUserNotice(
-        uid,
-        "Вы забанены: " + reason,
-        "error",
-        null,
-      );
+      await createUserNotice(uid, "Вы забанены: " + reason, "error", null);
     }
     res.json({
       success: true,
@@ -1335,16 +1340,19 @@ app.post("/api/admin/users/:id/message", requireAdmin, async (req, res) => {
       return res.json({ success: false, error: "Введите сообщение" });
     }
     if (uid === req.user_id) {
-      return res.json({ success: false, error: "Нельзя отправить себе сообщение" });
+      return res.json({
+        success: false,
+        error: "Нельзя отправить себе сообщение",
+      });
     }
     const users = await q("SELECT id FROM users WHERE id=?", [uid]);
     if (!users.length) {
       return res.json({ success: false, error: "Пользователь не найден" });
     }
-    await run(
-      "INSERT INTO admin_messages(user_id, message) VALUES (?, ?)",
-      [uid, message],
-    );
+    await run("INSERT INTO admin_messages(user_id, message) VALUES (?, ?)", [
+      uid,
+      message,
+    ]);
     await createUserNotice(uid, message, "admin", null);
     res.json({ success: true, message: "Сообщение отправлено" });
   } catch (err) {
@@ -1424,12 +1432,15 @@ app.post("/api/admin/notifications/read", requireAdmin, async (req, res) => {
     await run("UPDATE notifications SET `read`=1");
     res.json({ success: true });
   } catch (err) {
-    console.error("Ошибка маркировки уведомлений как прочитанных:", err.message);
+    console.error(
+      "Ошибка маркировки уведомлений как прочитанных:",
+      err.message,
+    );
     res.json({ success: false, error: "Ошибка сервера" });
   }
 });
 
-// ---- Error handler ------  
+// ---- Error handler ------
 app.use((err, req, res, next) => {
   if (err instanceof multer.MulterError) {
     if (err.code === "LIMIT_FILE_SIZE")
