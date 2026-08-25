@@ -1380,6 +1380,7 @@
         }
         var tg = window.Telegram.WebApp;
         var initData = tg.initData;
+        alert("DEBUG initData: " + (initData || "пусто"));
         if (!initData) {
           showToast("⚠️ Данные Telegram не доступны");
           return;
