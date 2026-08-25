@@ -530,6 +530,21 @@
         font-size: 1em;
         flex-shrink: 0;
       }
+      /* Кнопка «назад» (стрелка) в шапке модального окна */
+      .modal-nav {
+        background: rgba(91, 117, 248, 0.12);
+        border: none;
+        color: var(--primary);
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1.05em;
+        flex-shrink: 0;
+      }
       .modal {
         /* Всплывающее модальное окно (профиль, отзывы, добавить скамейку).
            Полупрозрачная подложка + центрированная карточка. Скрыто по
@@ -846,8 +861,9 @@
           transform 0.3s ease-out,
           opacity 0.3s ease-out;
       }
-      /* Draggable marker overlay on map during bench creation */
+      /* Центральный маркер размещения скамейки (показывается при создании скамейки) */
       .marker-drag-overlay {
+        display: none;
         position: absolute;
         top: 50%;
         left: 50%;
@@ -1073,7 +1089,9 @@
     <div id="addModal" class="modal">
       <div class="modal-content">
         <div class="modal-header">
+          <button class="modal-nav" onclick="closeModal('addModal')"><i class="fa-solid fa-arrow-left"></i></button>
           <h2>Новая скамейка</h2>
+          <button class="close-btn" onclick="closeModal('addModal')">✕</button>
         </div>
         <div id="addModalContent"></div>
       </div>
@@ -1242,14 +1260,10 @@
         document.getElementById(id).classList.remove("active");
         // Очистка при закрытии модального окна добавления скамейки
         if (id === "addModal") {
-          // Отключаем перетаскивание маркера геолокации и сбрасываем обработчики
-          if (userPlacemark && userPlacemark.dragging) {
-            userPlacemark.dragging.disable();
-          }
-          if (userPlacemark && userPlacemark._benchMoveHandler) {
-            userPlacemark.off("move", userPlacemark._benchMoveHandler);
-            userPlacemark.off("dragend", userPlacemark._benchMoveHandler);
-            userPlacemark._benchMoveHandler = null;
+          // Отписываемся от панорамирования карты и прячем центральный маркер
+          if (myMap) {
+            myMap.off("move", syncCenterCoords);
+            myMap.off("moveend", syncCenterCoords);
           }
           var overlay = document.getElementById("markerDragOverlay");
           if (overlay) overlay.style.display = "none";
@@ -1265,7 +1279,9 @@
       document.querySelectorAll(".modal").forEach(function (m) {
         m.addEventListener("click", function (e) {
           if (e.target === m) {
-            m.classList.remove("active");
+            var mid = m.getAttribute("id");
+            if (mid) closeModal(mid);
+            else m.classList.remove("active");
           }
         });
       });
@@ -1834,6 +1850,7 @@
       function sendReport(id) {
         var reason = document.getElementById("reportReason").value;
         var files = document.getElementById("reportPhotos").files;
+        if (!validateFileSize(files, 10)) return;
         var fd = new FormData();
         fd.append("reason", reason);
         for (var i = 0; i < files.length; i++) {
@@ -1966,6 +1983,7 @@
           return;
         }
         var files = document.getElementById("reviewPhotos").files;
+        if (!validateFileSize(files, 10)) return;
         var fd = new FormData();
         fd.append("rating", reviewRating);
         fd.append("comment", c);
@@ -2107,17 +2125,26 @@
         searchTimeout = setTimeout(function () {
           var errEl = document.getElementById("searchError");
           if (errEl) errEl.classList.remove("active");
-          var q = document.getElementById("searchInput").value.trim();
-          if (!q || q.length < 2) {
-            document
-              .getElementById("searchResultsList")
-              .classList.remove("active");
-            return;
+        var q = document.getElementById("searchInput").value.trim();
+        var list = document.getElementById("searchResultsList");
+        var addrList = document.getElementById("addressResults");
+        if (!q || q.length < 2) {
+          // Поле очищено — прячем и живые подсказки, и результаты адресного поиска
+          if (list) list.classList.remove("active");
+          if (addrList) {
+            addrList.style.display = "none";
+            addrList.innerHTML = "";
           }
-          var list = document.getElementById("searchResultsList");
-          list.innerHTML =
-            '<p style="padding:14px;color:var(--gray)">Поиск...</p>';
-          list.classList.add("active");
+          return;
+        }
+        // Показываем только «живые» подсказки, прячем результаты по адресу
+        if (addrList) {
+          addrList.style.display = "none";
+          addrList.innerHTML = "";
+        }
+        list.innerHTML =
+          '<p style="padding:14px;color:var(--gray)">Поиск...</p>';
+        list.classList.add("active");
           fetch(
             "https://nominatim.openstreetmap.org/search?format=json&q=" +
               encodeURIComponent("Тверь, " + q)
@@ -2201,8 +2228,32 @@
           if (e.target === o) o.remove();
         });
         document.body.appendChild(o);
-      }
-      function openAddModal() {
+       }
+       // syncCenterCoords(): пока открыто окно добавления скамейки, держит
+       // userPosition синхронным с центром карты — скамейка ставится туда,
+       // куда указывает центральный маркер (marker-drag-overlay). Вызывается
+       // Leaflet при панорамировании карты (move / moveend). Самоотписывается,
+       // если окно закрыто любым способом (тап по фону, Back и т. п.).
+       function syncCenterCoords() {
+         var am = document.getElementById("addModal");
+         if (!am || !am.classList.contains("active")) {
+           if (myMap) {
+             myMap.off("move", syncCenterCoords);
+             myMap.off("moveend", syncCenterCoords);
+           }
+           return;
+         }
+         if (!myMap || !userPosition) return;
+         var c = myMap.getCenter();
+         userPosition.lat = c.lat;
+         userPosition.lng = c.lng;
+         var coordsEl = document.getElementById("benchCoords");
+         if (coordsEl) {
+           coordsEl.textContent =
+             "Координаты: " + c.lat.toFixed(5) + ", " + c.lng.toFixed(5);
+         }
+       }
+       function openAddModal() {
         if (!currentUser) {
           showToast("Войдите");
           return;
@@ -2212,40 +2263,30 @@
           return;
         }
         document.getElementById("addModalContent").innerHTML =
-          '<div class="form-group"><label>Фото (обязательно!)</label><input type="file" id="modalPhotoInput" accept="image/*" capture="environment" multiple></div><div id="photoPreview" style="display:flex;gap:10px;flex-wrap:wrap"></div><div class="form-group"><label>Описание</label><textarea id="modalBenchDesc" rows="3"></textarea></div><div class="form-group" style="text-align:center"><i class="fa-solid fa-map-pin" style="color:var(--primary);font-size:1.5em"></i><div id="benchCoords" style="font-size:12px;color:var(--gray);margin-top:5px">Координаты: загружаются...</div></div><button class="btn" onclick="saveBench()">Сохранить</button>';
+          '<div class="form-group"><label>Фото (обязательно!)</label><input type="file" id="modalPhotoInput" accept="image/*" capture="environment" multiple></div><div id="photoPreview" style="display:flex;gap:10px;flex-wrap:wrap"></div><div class="form-group"><label>Описание</label><textarea id="modalBenchDesc" rows="3"></textarea></div><div class="form-group" style="text-align:center"><i class="fa-solid fa-map-pin" style="color:var(--primary);font-size:1.5em"></i><div id="benchCoords" style="font-size:12px;color:var(--gray);margin-top:5px">Координаты: загружаются...</div></div><div style="display:flex;gap:10px;justify-content:flex-end"><button class="btn" onclick="saveBench()">Сохранить</button><button class="btn" type="button" style="background:rgba(148,163,184);color:#fff" onclick="closeModal(\'addModal\')">Отмена</button></div>';
         document.getElementById("addModal").classList.add("active");
-        // Делаем маркер геолокации (userPlacemark) перетаскиваемым, чтобы
-        // пользователь мог точно указать местоположение скамейки. Координаты
-        // синхронизируются в userPosition — saveBench() сохраняет именно их.
-        var coordsEl = document.getElementById("benchCoords");
-        function syncBenchCoords() {
-          if (!coordsEl || !userPosition) return;
-          coordsEl.textContent =
-            "Координаты: " +
-            userPosition.lat.toFixed(5) +
-            ", " +
-            userPosition.lng.toFixed(5);
-        }
-        if (myMap && userPlacemark && userPlacemark.dragging) {
-          // Центрируем карту на маркере и включаем перетаскивание
-          myMap.setView([userPosition.lat, userPosition.lng], 16);
-          userPlacemark.dragging.enable({ autoPan: true });
-          // Обновляем координаты «на лету» во время и после перетаскивания
-          userPlacemark._benchMoveHandler = function () {
-            var c = userPlacemark.getLatLng();
-            userPosition.lat = c.lat;
-            userPosition.lng = c.lng;
-            syncBenchCoords();
-          };
-          userPlacemark.on("move", userPlacemark._benchMoveHandler);
-          userPlacemark.on("dragend", userPlacemark._benchMoveHandler);
-          syncBenchCoords();
-        } else if (coordsEl) {
-          syncBenchCoords();
-        }
-        // Центральная «точка падения» больше не нужна: маркер перетаскиваем сами
+        // Центральный маркер (overlay) в центре экрана — цель для размещения
+        // скамейки. Пользователь панорамирует карту, а координаты скамейки
+        // берутся из центра карты (userPosition синхронизируется в
+        // syncCenterCoords). Маркер остаётся в центре экрана.
         var overlay = document.getElementById("markerDragOverlay");
-        if (overlay) overlay.style.display = "none";
+        if (overlay) overlay.style.display = "flex";
+        if (myMap) {
+          // Центрируем карту на геолокации, чтобы маркер оказался в центре
+          myMap.setView([userPosition.lat, userPosition.lng], 16);
+          myMap.on("move", syncCenterCoords);
+          myMap.on("moveend", syncCenterCoords);
+          syncCenterCoords();
+        } else {
+          var coordsEl = document.getElementById("benchCoords");
+          if (coordsEl) {
+            coordsEl.textContent =
+              "Координаты: " +
+              userPosition.lat.toFixed(5) +
+              ", " +
+              userPosition.lng.toFixed(5);
+          }
+        }
         document
           .getElementById("modalPhotoInput")
           .addEventListener("change", function (e) {
@@ -2264,6 +2305,26 @@
             });
           });
       }
+      // Проверяет размер выбранных файлов (жёсткий лимит — 10 МБ). Совпадает с
+      // серверным limits.fileSize, но даёт пользователю мгновенный фидбэк.
+      function validateFileSize(files, maxMB) {
+        var max = maxMB * 1024 * 1024;
+        for (var i = 0; i < files.length; i++) {
+          if (files[i].size > max) {
+            showToast(
+              "Файл слишком большой: " +
+                files[i].name +
+                " (" +
+                (files[i].size / (1024 * 1024)).toFixed(1) +
+                " МБ; максимум " +
+                maxMB +
+                " МБ)",
+            );
+            return false;
+          }
+        }
+        return true;
+      }
       function saveBench() {
         var d = document.getElementById("modalBenchDesc").value.trim(),
           f = document.getElementById("modalPhotoInput").files;
@@ -2271,6 +2332,7 @@
           showOverlay("fa-xmark", "#e74c3c", "Ошибка", "Фото обязательно!");
           return;
         }
+        if (!validateFileSize(f, 10)) return;
         if (!userPosition) {
           showToast("Сначала определите геопозицию");
           return;
@@ -2696,6 +2758,7 @@
         fd.append("phone", phone);
         fd.append("email", email);
         var avatarFile = document.getElementById("editAvatarInput").files;
+        if (avatarFile.length && !validateFileSize(avatarFile, 10)) return;
         if (avatarFile.length) {
           fd.append("avatar", avatarFile[0]);
         }
@@ -2908,7 +2971,7 @@
               headers: authHeaders(),
             });
             list.innerHTML = d.notifications
-              .map(function (n) {
+ы              .map(function (n) {
                 return (
                   '<div class="notif-item">' +
                   '<div class="notif-msg">' +

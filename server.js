@@ -11,6 +11,7 @@ const path = require("path");
 const fs = require("fs");
 const multer = require("multer");
 const crypto = require("crypto");
+const os = require("os");
 
 // ---- Configuration --------------------------------------------------------
 const app = express();
@@ -39,6 +40,10 @@ if (!D1_ACCOUNT_ID || !D1_DATABASE_ID || !D1_API_TOKEN) {
 const D1_ENDPOINT = `https://api.cloudflare.com/client/v4/accounts/${D1_ACCOUNT_ID}/d1/database/${D1_DATABASE_ID}/query`;
 
 // ---- Required directories -------------------------------------------------
+// Фото больше не сохраняются в /uploads: временно ссыпаются в системный tmp-каталог,
+// сразу читаются, конвертируются в data URL и удаляются. Сами хранятся в D1.
+const TMP_DIR = path.join(os.tmpdir(), "tver-benches-uploads");
+if (!fs.existsSync(TMP_DIR)) fs.mkdirSync(TMP_DIR, { recursive: true });
 if (!fs.existsSync(__dirname + "/uploads"))
   fs.mkdirSync(__dirname + "/uploads");
 if (!fs.existsSync(__dirname + "/public")) fs.mkdirSync(__dirname + "/public");
@@ -364,7 +369,7 @@ app.use((req, res, next) => {
 });
 
 const storage = multer.diskStorage({
-  destination: (req, file, cb) => cb(null, __dirname + "/uploads/"),
+  destination: (req, file, cb) => cb(null, TMP_DIR),
   filename: (req, file, cb) =>
     cb(
       null,
@@ -375,6 +380,21 @@ const storage = multer.diskStorage({
     ),
 });
 const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
+
+// Конвертирует загруженный multer-файл во data URL ('data:<mime>;base64,<data>')
+// и сразу удаляет временный файл с диска. Фото попадают в D1 и не пропадают.
+function fileToDataURL(file) {
+  if (!file || !file.path) return null;
+  try {
+    const buf = fs.readFileSync(file.path);
+    const mime = file.mimetype || "application/octet-stream";
+    return "data:" + mime + ";base64," + buf.toString("base64");
+  } finally {
+    try {
+      fs.unlinkSync(file.path);
+    } catch (e) {}
+  }
+}
 
 // ============================================================================
 //  Database initialization (each CREATE TABLE is a separate D1 call)
@@ -580,13 +600,15 @@ app.post(
   async (req, res) => {
     if (!req.file)
       return res.json({ success: false, error: "Файл не загружен" });
-    const avatarUrl = "/uploads/" + req.file.filename;
+      const avatarData = fileToDataURL(req.file);
+    if (!avatarData)
+      return res.json({ success: false, error: "Файл не загружен" });
     try {
       await run("UPDATE users SET avatar=? WHERE id=?", [
-        avatarUrl,
+        avatarData,
         req.user_id,
       ]);
-      res.json({ success: true, avatar: avatarUrl });
+      res.json({ success: true, avatar: avatarData });
     } catch (err) {
       console.error("Ошибка загрузки аватара:", err.message);
       res.json({ success: false, error: "Ошибка сервера" });
@@ -915,7 +937,7 @@ app.post(
       for (const f of req.files) {
         await run("INSERT INTO bench_photos(bench_id,photo_url) VALUES (?,?)", [
           benchId,
-          "/uploads/" + f.filename,
+          fileToDataURL(f),
         ]);
       }
       if (uid)
@@ -994,12 +1016,12 @@ app.post(
       const reviewId = await d1LastInsertRowid("bench_ratings");
 
       if (req.files && req.files.length) {
-        for (const f of req.files) {
-          await run(
-            "INSERT INTO review_photos(review_id,photo_url) VALUES (?,?)",
-            [reviewId, "/uploads/" + f.filename],
-          );
-        }
+          for (const f of req.files) {
+            await run(
+              "INSERT INTO review_photos(review_id,photo_url) VALUES (?,?)",
+              [reviewId, fileToDataURL(f)],
+            );
+          }
       }
       await q(
         "UPDATE benches SET rating=(SELECT AVG(rating) FROM bench_ratings WHERE bench_id=?) WHERE id=?",
@@ -1109,11 +1131,11 @@ app.post(
       const reportId = await d1LastInsertRowid("bench_reports");
       if (req.files && req.files.length) {
         for (const f of req.files) {
-          await run(
-            "INSERT INTO report_photos(report_id,photo_url) VALUES (?,?)",
-            [reportId, "/uploads/" + f.filename],
-          );
-        }
+        await run(
+          "INSERT INTO report_photos(report_id,photo_url) VALUES (?,?)",
+          [reportId, fileToDataURL(f)],
+        );
+      }
       }
       await createNotification(
         null,
