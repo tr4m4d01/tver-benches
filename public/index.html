@@ -875,12 +875,13 @@
         position: absolute;
         top: 50%;
         left: 50%;
-        transform: translate(-50%, -50%);
+        transform: translate(-50%, -100%);
         z-index: 10000;
         pointer-events: none;
+        filter: drop-shadow(0 0 6px rgba(108,139,140,0.6));
       }
       .marker-drag-overlay i {
-        font-size: 2.5em;
+        font-size: 2.8em;
         color: var(--primary);
         text-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
         animation: pulse 1.5s infinite;
@@ -911,8 +912,12 @@
         line-height: 1.4;
       }
       .admin-comment-badge i {
-        color: #856404;
+        color: var(--yellow);
         margin-right: 6px;
+      }
+      /* Temporary placement marker */
+      .temp-placemark {
+        filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
       }
       @media (min-width: 768px) {
         #mainApp {
@@ -922,6 +927,49 @@
         }
         .auth-card {
           max-width: 420px;
+        }
+      }
+      @media (max-width: 767px) {
+        .modal {
+          align-items: flex-end;
+          padding: 0;
+        }
+        .modal-content {
+          border-radius: 18px 18px 0 0;
+          max-height: 92vh;
+          width: 100%;
+          max-width: 100%;
+        }
+        .search-container {
+          top: 10px;
+          left: 10px;
+          right: 10px;
+        }
+        .search-bar {
+          padding: 10px 12px;
+        }
+        .map-buttons {
+          right: 10px;
+          bottom: 16px;
+          gap: 10px;
+        }
+        .map-btn {
+          width: 44px;
+          height: 44px;
+          border-radius: 12px;
+        }
+        .bench-card-content {
+          padding: 0 14px 14px;
+        }
+        .notifications-panel {
+          right: 10px;
+          bottom: 68px;
+          width: calc(100% - 20px);
+          max-width: 320px;
+        }
+        #backToTop {
+          left: 10px;
+          bottom: 68px;
         }
       }
     </style>
@@ -1081,6 +1129,7 @@
       <div class="modal-content">
         <div class="modal-header">
           <h2>Отзывы</h2>
+          <button class="close-btn" onclick="closeModal('reviewsModal')"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div id="reviewsContent"></div>
       </div>
@@ -1090,18 +1139,19 @@
       <div class="modal-content">
         <div class="modal-header">
           <h2>Профиль</h2>
+          <button class="close-btn" onclick="closeModal('profileModal')"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div id="profileContent"></div>
       </div>
     </div>
-    <div id="addModal" class="modal">
+     <div id="addModal" class="modal">
       <div class="modal-content">
         <div class="modal-header">
           <button class="modal-nav" onclick="closeModal('addModal')">
             <i class="fa-solid fa-arrow-left"></i>
           </button>
           <h2>Новое место</h2>
-          <button class="close-btn" onclick="closeModal('addModal')"></button>
+          <button class="close-btn" onclick="closeModal('addModal')"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div id="addModalContent"></div>
       </div>
@@ -1110,6 +1160,7 @@
       <div class="modal-content">
         <div class="modal-header">
           <h2>Поблизости</h2>
+          <button class="close-btn" onclick="closeModal('nearbyModal')"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div id="nearbyContent"></div>
       </div>
@@ -1118,6 +1169,7 @@
       <div class="modal-content">
         <div class="modal-header">
           <h2>Топ</h2>
+          <button class="close-btn" onclick="closeModal('topModal')"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <div id="topContent"></div>
       </div>
@@ -1157,7 +1209,9 @@
         profileInterval = null,
         dragPlacemark = null,
         isDraggingMarker = false,
-        addMapClickHandler = null;
+        addMapClickHandler = null,
+        tempPlacemark = null,
+        benchPlacemark = null;
       if (window.Telegram && window.Telegram.WebApp) {
         var tg = window.Telegram.WebApp;
         tg.ready();
@@ -1275,6 +1329,14 @@
             if (addMapClickHandler) {
               myMap.off("click", addMapClickHandler);
               addMapClickHandler = null;
+            }
+            if (tempPlacemark) {
+              myMap.removeLayer(tempPlacemark);
+              tempPlacemark = null;
+            }
+            if (benchPlacemark) {
+              myMap.removeLayer(benchPlacemark);
+              benchPlacemark = null;
             }
           }
           var overlay = document.getElementById("markerDragOverlay");
@@ -2230,6 +2292,9 @@
         var c = myMap.getCenter();
         userPosition.lat = c.lat;
         userPosition.lng = c.lng;
+        if (benchPlacemark) {
+          benchPlacemark.setLatLng([c.lat, c.lng]);
+        }
         var coordsEl = document.getElementById("benchCoords");
         if (coordsEl) {
           coordsEl.textContent =
@@ -2252,13 +2317,36 @@
         if (overlay) overlay.style.display = "flex";
         if (myMap) {
           myMap.setView([userPosition.lat, userPosition.lng], 16);
-          myMap.on("move", syncCenterCoords);
-          myMap.on("moveend", syncCenterCoords);
+          if (benchPlacemark) {
+            myMap.removeLayer(benchPlacemark);
+            benchPlacemark = null;
+          }
+          benchPlacemark = L.marker([userPosition.lat, userPosition.lng], {
+            draggable: true,
+            icon: createBenchIcon(),
+          }).addTo(myMap);
+          benchPlacemark.on("drag", function (e) {
+            var ll = e.latlng;
+            userPosition = { lat: ll.lat, lng: ll.lng };
+            var coordsEl = document.getElementById("benchCoords");
+            if (coordsEl) {
+              coordsEl.textContent =
+                "Координаты: " + ll.lat.toFixed(5) + ", " + ll.lng.toFixed(5);
+            }
+          });
+          benchPlacemark.on("dragend", function (e) {
+            var ll = e.latlng;
+            userPosition = { lat: ll.lat, lng: ll.lng };
+            myMap.setView([ll.lat, ll.lng], myMap.getZoom());
+          });
           syncCenterCoords();
           addMapClickHandler = function (e) {
             if (!document.getElementById("addModal").classList.contains("active")) return;
-            userPosition = { lat: e.latlng.lat, lng: e.latlng.lng };
-            myMap.setView([userPosition.lat, userPosition.lng], myMap.getZoom());
+            if (!benchPlacemark) return;
+            var ll = e.latlng;
+            benchPlacemark.setLatLng([ll.lat, ll.lng]);
+            userPosition = { lat: ll.lat, lng: ll.lng };
+            myMap.setView([ll.lat, ll.lng], myMap.getZoom());
             syncCenterCoords();
           };
           myMap.on("click", addMapClickHandler);
