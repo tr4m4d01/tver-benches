@@ -3039,7 +3039,11 @@
           window.location.hostname === "localhost" ||
           window.location.hostname === "127.0.0.1";
         var isDevParam = new URLSearchParams(window.location.search).has("dev");
-        if (isLocalhost || isDevParam) {
+        var isDevEnv =
+          isLocalhost ||
+          isDevParam ||
+          document.querySelector('meta[name="x-dev-env"]') !== null;
+        if (isDevEnv) {
           var devBlock = document.getElementById("devAuthBlock");
           if (devBlock) devBlock.style.display = "block";
           var devBtn = document.getElementById("devLoginBtn");
