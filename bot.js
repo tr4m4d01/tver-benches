@@ -24,4 +24,19 @@ bot.onText(/\/start/, (msg) => {
   );
 });
 
+bot.on("web_app_data", (msg) => {
+  const chatId = msg.chat.id;
+  const data = msg.web_app_data.data;
+
+  try {
+    const parsed = JSON.parse(data);
+
+    if (parsed.action === "bench_added" && parsed.bench_name) {
+      bot.sendMessage(chatId, `✅ Скамейка «${parsed.bench_name}» добавлена!`);
+    }
+  } catch (e) {
+    bot.sendMessage(chatId, "✅ Данные получены из Mini App");
+  }
+});
+
 console.log("Бот запущен");

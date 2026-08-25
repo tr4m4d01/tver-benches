@@ -21,6 +21,7 @@ const PORT = process.env.PORT || 3000;
 const D1_ACCOUNT_ID = process.env.D1_ACCOUNT_ID;
 const D1_DATABASE_ID = process.env.D1_DATABASE_ID;
 const D1_API_TOKEN = process.env.D1_API_TOKEN;
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 
 // Reliability tuning
 const D1_RETRIES = 3; // retry attempts on transient failures
@@ -350,13 +351,121 @@ function requireAdmin(req, res, next) {
   });
 }
 
+function verifyTelegramAuth(initData) {
+  if (!initData || !TELEGRAM_BOT_TOKEN) return null;
+
+  try {
+    const url = new URL(initData, "http://localhost");
+    const hash = url.searchParams.get("hash");
+    if (!hash) return null;
+
+    url.searchParams.delete("hash");
+
+    const params = Array.from(url.searchParams.entries()).sort(([a], [b]) =>
+      a.localeCompare(b),
+    );
+
+    const dataCheckString = params
+      .map(([k, v]) => `${k}=${v}`)
+      .join("\n");
+
+    const secretKey = crypto
+      .createHmac("sha256", "WebAppData")
+      .update(TELEGRAM_BOT_TOKEN)
+      .digest();
+
+    const computedHash = crypto
+      .createHmac("sha256", secretKey)
+      .update(dataCheckString)
+      .digest("hex");
+
+    if (computedHash !== hash) return null;
+
+    const userParam = url.searchParams.get("user");
+    if (!userParam) return null;
+
+    return JSON.parse(userParam);
+  } catch (e) {
+    console.error("Ошибка проверки Telegram auth:", e.message);
+    return null;
+  }
+}
+
+app.post("/api/telegram-login", async (req, res) => {
+  const initData = req.body.initData;
+  const tgUser = verifyTelegramAuth(initData);
+
+  if (!tgUser) {
+    return res.json({ success: false, error: "Неверные данные Telegram" });
+  }
+
+  try {
+    const telegramId = String(tgUser.id);
+    const username = tgUser.username || "";
+    const firstName = tgUser.first_name || "";
+    const lastName = tgUser.last_name || "";
+
+    let users = await q("SELECT * FROM users WHERE telegram_id=?", [telegramId]);
+
+    if (!users.length) {
+      const login = (username || `tg_${telegramId}`).substring(0, 50);
+      const nickname = (firstName || username || "Пользователь").substring(0, 100);
+
+      await run(
+        "INSERT INTO users(telegram_id, login, nickname, first_name, last_name) VALUES (?,?,?,?,?)",
+        [telegramId, login, nickname, firstName, lastName],
+      );
+
+      const newUsers = await q(
+        "SELECT * FROM users WHERE telegram_id=?",
+        [telegramId],
+      );
+      const user = newUsers[0];
+      const token = crypto.randomBytes(32).toString("hex");
+      const expiresAt = Date.now() + SESSION_DURATION;
+      await run(
+        "INSERT INTO sessions(user_id,token,expires_at) VALUES (?,?,?)",
+        [user.id, token, expiresAt],
+      );
+
+      return res.json({
+        success: true,
+        user: { id: user.id, nickname: user.nickname, is_admin: user.is_admin },
+        token,
+      });
+    } else {
+      const user = users[0];
+      const token = crypto.randomBytes(32).toString("hex");
+      const expiresAt = Date.now() + SESSION_DURATION;
+      await run(
+        "INSERT INTO sessions(user_id,token,expires_at) VALUES (?,?,?)",
+        [user.id, token, expiresAt],
+      );
+
+      return res.json({
+        success: true,
+        user: { id: user.id, nickname: user.nickname, is_admin: user.is_admin },
+        token,
+      });
+    }
+  } catch (err) {
+    console.error("Ошибка Telegram входа:", err.message);
+    res.json({ success: false, error: "Ошибка сервера" });
+  }
+});
+
 // ============================================================================
 //  Express middleware
 // ============================================================================
-app.use(cors());
+const CORS_ORIGIN = process.env.CORS_ORIGIN || "https://tver-benches.onrender.com";
+app.use(cors({ origin: CORS_ORIGIN }));
 app.use(express.json({ limit: "50mb" }));
 app.use("/uploads", express.static(__dirname + "/uploads"));
 app.use(express.static(__dirname + "/public"));
+
+app.get("/admin", requireAdmin, (req, res) => {
+  res.sendFile(path.join(__dirname, "private", "admin.html"));
+});
 
 app.use((req, res, next) => {
   res.setHeader(
@@ -379,7 +488,20 @@ const storage = multer.diskStorage({
         path.extname(file.originalname),
     ),
 });
-const upload = multer({ storage, limits: { fileSize: 10 * 1024 * 1024 } });
+const upload = multer({
+  storage,
+  limits: { fileSize: 10 * 1024 * 1024 },
+  fileFilter: (req, file, cb) => {
+    const allowedMimes = ["image/jpeg", "image/png", "image/webp", "image/gif"];
+    const allowedExts = [".jpg", ".jpeg", ".png", ".webp", ".gif"];
+    const ext = path.extname(file.originalname).toLowerCase();
+    if (allowedMimes.includes(file.mimetype) || allowedExts.includes(ext)) {
+      cb(null, true);
+    } else {
+      cb(new multer.MulterError("LIMIT_UNEXPECTED_FILE_TYPE"), false);
+    }
+  },
+});
 
 // Конвертирует загруженный multer-файл во data URL ('data:<mime>;base64,<data>')
 // и сразу удаляет временный файл с диска. Фото попадают в D1 и не пропадают.
@@ -477,6 +599,13 @@ async function initDatabase() {
   if (!ucols.some((c) => c.name === "ban_reason")) {
     await run(`ALTER TABLE users ADD COLUMN ban_reason TEXT DEFAULT NULL`);
     console.log("Добавлена колонка ban_reason в users");
+  }
+  if (!ucols.some((c) => c.name === "telegram_id")) {
+    await run(`ALTER TABLE users ADD COLUMN telegram_id TEXT DEFAULT NULL`);
+    await run(
+      `CREATE UNIQUE INDEX IF NOT EXISTS idx_users_telegram_id ON users(telegram_id)`,
+    );
+    console.log("Добавлена колонка telegram_id в users");
   }
 }
 
@@ -890,6 +1019,32 @@ app.get("/api/top-users", async (req, res) => {
   } catch (err) {
     console.error("Ошибка получения топ пользователей:", err.message);
     res.json({ success: false, error: "Ошибка сервера" });
+  }
+});
+
+// GET /api/geocode — прокси для Nominatim с кэшированием и User-Agent
+app.get("/api/geocode", async (req, res) => {
+  const q = (req.query.q || "").trim();
+  if (!q) return res.json({ success: false, error: "Пустой запрос" });
+  const cacheKey = "geocode:" + q.toLowerCase();
+  try {
+    const cached = getCache(cacheKey);
+    if (cached) return res.json(cached);
+    const url =
+      "https://nominatim.openstreetmap.org/search?format=json&limit=5&q=" +
+      encodeURIComponent(q);
+    const response = await fetch(url, {
+      headers: {
+        "User-Agent": "TverBenchesMiniApp/1.0 (contact@tver-benches.onrender.com)",
+      },
+    });
+    const data = await response.json();
+    const result = { success: true, data };
+    setCache(cacheKey, result);
+    res.json(result);
+  } catch (err) {
+    console.error("Ошибка геокодирования:", err.message);
+    res.json({ success: false, error: "Ошибка сервиса геокодирования" });
   }
 });
 
@@ -1492,6 +1647,8 @@ app.use((err, req, res, next) => {
       return res.json({ success: false, error: "Файл слишком большой" });
     if (err.code === "LIMIT_FILE_COUNT")
       return res.json({ success: false, error: "Слишком много файлов" });
+    if (err.code === "LIMIT_UNEXPECTED_FILE_TYPE")
+      return res.json({ success: false, error: "Разрешены только изображения" });
     return res.json({ success: false, error: "Ошибка загрузки файла" });
   }
   console.error("Необработанная ошибка:", err);

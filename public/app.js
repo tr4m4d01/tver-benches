@@ -3,13 +3,8 @@ const tg = window.Telegram.WebApp;
 tg.ready();
 tg.expand();
 
-// Данные пользователя
-const userData = tg.initDataUnsafe?.user || {};
-const currentUser = {
-    id: userData.id,
-    username: userData.username || 'user_' + userData.id,
-    firstName: userData.first_name || 'Пользователь'
-};
+// Сессионный токен
+let authToken = localStorage.getItem('tg_token');
 
 // Инициализация карты
 const map = L.map('map', {
@@ -44,7 +39,6 @@ async function loadBenches() {
 
 // Отображение скамеек
 function displayBenches() {
-    // Очистка старых маркеров
     map.eachLayer((layer) => {
         if (layer instanceof L.Marker && layer !== userMarker) {
             map.removeLayer(layer);
@@ -128,8 +122,59 @@ function openAddModal() {
     getLocation();
 }
 
+// Telegram авторизация
+async function ensureAuth() {
+    if (authToken) return;
+
+    if (!window.Telegram || !window.Telegram.WebApp) {
+        showToast('⚠️ Это приложение работает только в Telegram');
+        return;
+    }
+
+    const tg = window.Telegram.WebApp;
+    const initData = tg.initData;
+
+    if (!initData) {
+        showToast('⚠️ Данные Telegram не доступны');
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/telegram-login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ initData })
+        });
+
+        const data = await response.json();
+
+        if (data.success) {
+            authToken = data.token;
+            localStorage.setItem('tg_token', authToken);
+        } else {
+            showToast(data.error || '❌ Ошибка авторизации');
+        }
+    } catch (error) {
+        showToast('❌ Ошибка соединения');
+    }
+}
+
+function authHeaders() {
+    const headers = {};
+    if (authToken) {
+        headers['Authorization'] = 'Bearer ' + authToken;
+    }
+    return headers;
+}
+
 // Сохранение скамейки
 async function saveBench() {
+    await ensureAuth();
+    if (!authToken) {
+        showToast('⚠️ Требуется авторизация');
+        return;
+    }
+
     const name = document.getElementById('benchName').value;
     const description = document.getElementById('benchDescription').value;
     const photoFiles = document.getElementById('photoInput').files;
@@ -149,8 +194,6 @@ async function saveBench() {
     formData.append('description', description);
     formData.append('latitude', userPosition.lat);
     formData.append('longitude', userPosition.lng);
-    formData.append('telegram_id', currentUser.id);
-    formData.append('username', currentUser.username);
     
     for (let i = 0; i < photoFiles.length; i++) {
         formData.append('photos', photoFiles[i]);
@@ -159,6 +202,7 @@ async function saveBench() {
     try {
         const response = await fetch('/api/benches', {
             method: 'POST',
+            headers: authHeaders(),
             body: formData
         });
         
@@ -175,6 +219,9 @@ async function saveBench() {
             
             loadBenches();
             showToast('✅ Скамейка добавлена!');
+        } else {
+            const data = await response.json();
+            showToast(data.error || '❌ Ошибка сохранения');
         }
     } catch (error) {
         showToast('❌ Ошибка сохранения');

@@ -938,34 +938,9 @@
         <div class="auth-subtitle">
           Находите лучшие скамейки Твери рядом с вами
         </div>
-        <div class="auth-tabs">
-          <!-- Переключатели режима: показывают нужный блок ниже -->
-          <div class="auth-tab active" onclick="showLogin()">Вход</div>
-          <div class="auth-tab" onclick="showRegister()">Регистрация</div>
-        </div>
-        <!-- Блок входа. Поля loginLogin/loginPassword читаются в doLogin() -->
-        <div id="loginBox">
-          <div class="form-group">
-            <label>Логин</label><input type="text" id="loginLogin" />
-          </div>
-          <div class="form-group">
-            <label>Пароль</label><input type="password" id="loginPassword" />
-          </div>
-          <button class="btn" onclick="doLogin()">Войти</button>
-        </div>
-        <!-- Блок регистрации (скрыт, пока не выбран таб «Регистрация»).
-             Поля regLogin/regNickname/regPassword читаются в doRegister() -->
-        <div id="registerBox" style="display: none">
-          <div class="form-group">
-            <label>Логин (англ.)</label><input type="text" id="regLogin" />
-          </div>
-          <div class="form-group">
-            <label>Никнейм</label><input type="text" id="regNickname" />
-          </div>
-          <div class="form-group">
-            <label>Пароль</label><input type="password" id="regPassword" />
-          </div>
-          <button class="btn" onclick="doRegister()">Зарегистрироваться</button>
+        <div id="telegramAuthBlock">
+          <button id="telegramLoginBtn" class="btn">Войти через Telegram</button>
+          <div id="authMessage" class="toast" style="margin-top:15px;display:none;"></div>
         </div>
       </div>
     </div>
@@ -1342,21 +1317,9 @@
         findMe();
       }
 
-      // ---- ПЕРЕКЛЮЧЕНИЕ ФОРМ ВХОДА/РЕГИСТРАЦИИ ---------------------------
-      // showLogin(): показывает блок входа, прячет регистрацию
-      function showLogin() {
-        document.querySelectorAll(".auth-tab")[0].classList.add("active");
-        document.querySelectorAll(".auth-tab")[1].classList.remove("active");
-        document.getElementById("loginBox").style.display = "block";
-        document.getElementById("registerBox").style.display = "none";
-      }
-      // showRegister(): наоборот, показывает регистрацию
-      function showRegister() {
-        document.querySelectorAll(".auth-tab")[1].classList.add("active");
-        document.querySelectorAll(".auth-tab")[0].classList.remove("active");
-        document.getElementById("registerBox").style.display = "block";
-        document.getElementById("loginBox").style.display = "none";
-      }
+      // ---- ПЕРЕКЛЮЧЕНИЕ ФОРМ ВХОДА/РЕГИСТРАЦИЯ ---------------------------
+      // (удалено: авторизация теперь через Telegram)
+      
       function showToast(m) {
         var o = document.querySelector(".toast");
         if (o) o.remove();
@@ -1403,57 +1366,24 @@
         // Закрывает всплывающее окно .overlay-modal по клику на крестик внутри
         el.closest(".overlay-modal").remove();
       }
-      // ---- РЕГИСТРАЦИЯ ----------------------------------------------------
-      // doRegister(): считывает поля регистрации, проверяет их (латиница
-      // логина, отсутствие мата) и отправляет POST /api/register.
-      function doRegister() {
-        var l = document.getElementById("regLogin").value.trim(),
-          n = document.getElementById("regNickname").value.trim(),
-          p = document.getElementById("regPassword").value;
-        if (!l || !n || !p) {
-          showToast("Заполните все поля");
+      // ---- Telegram АВТОРИЗАЦИЯ -------------------------------------------
+      // telegramLogin(): отправляет initData на /api/telegram-login, создаёт
+      // сессию и открывает основное приложение.
+      function telegramLogin() {
+        if (!window.Telegram || !window.Telegram.WebApp) {
+          showToast("⚠️ Это приложение работает только в Telegram");
           return;
         }
-        if (!isValidLatin(l)) {
-          showOverlay("fa-xmark", "#e74c3c", "Ошибка", "Логин только англ!");
+        var tg = window.Telegram.WebApp;
+        var initData = tg.initData;
+        if (!initData) {
+          showToast("⚠️ Данные Telegram не доступны");
           return;
         }
-        if (containsBadWords(n)) {
-          showOverlay("fa-xmark", "#e74c3c", "Ошибка", "Мат!");
-          return;
-        }
-        fetch("/api/register", {
+        fetch("/api/telegram-login", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ login: l, password: p, nickname: n }),
-        })
-          .then(function (r) {
-            return r.json();
-          })
-          .then(function (d) {
-            if (d.success) {
-              showOverlay("fa-check", "#27ae60", "Успех!", "Регистрация!");
-              showLogin();
-            } else {
-              showOverlay("fa-xmark", "#e74c3c", "Ошибка", d.error);
-            }
-          });
-      }
-      // ---- ВХОД ------------------------------------------------------------
-      // doLogin(): отправляет логин/пароль на POST /api/login. При успехе
-      // сохраняет пользователя (с токеном) в localStorage, прячет экран входа,
-      // показывает карту и через секунду определяет местоположение.
-      function doLogin() {
-        var l = document.getElementById("loginLogin").value.trim(),
-          p = document.getElementById("loginPassword").value;
-        if (!l || !p) {
-          showToast("Введите данные");
-          return;
-        }
-        fetch("/api/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ login: l, password: p }),
+          body: JSON.stringify({ initData: initData }),
         })
           .then(function (r) {
             return r.json();
@@ -1466,20 +1396,16 @@
               document.getElementById("authScreen").classList.add("hidden");
               document.getElementById("mainApp").classList.add("active");
               refreshMap();
-              // Refresh notification badge after login
               setTimeout(function () {
                 updateNotifBadge();
               }, 500);
             } else {
-              showOverlay("fa-xmark", "#e74c3c", "Ошибка", d.error);
+              showToast(d.error || "❌ Ошибка входа");
             }
           });
       }
       // checkAuth(): при загрузке страницы проверяет сохранённый в localStorage
-      // аккаунт и VERIFIES его сессию на сервере (GET /api/me). Если токен
-      // недействителен/истёк/пользователь удалён — считается, что сессия не
-      // валидна: очищаем localStorage и показываем экран входа. Если сессия
-      // валидна — синхронизируем данные пользователя и открываем карту.
+      // аккаунт и VERIFIES его сессию на сервере (GET /api/me).
       function checkAuth() {
         var s = localStorage.getItem("tver_user");
         if (s) {
@@ -1489,13 +1415,10 @@
             currentUser = null;
           }
         }
-        // Нет сохранённого токена — показываем экран входа.
         if (!currentUser || !currentUser.token) {
           showLoginScreen();
           return;
         }
-        // Проверяем сессию на сервере: если токен/пользователь недействительны —
-        // считаем пользователя неавторизованным и показываем вход.
         fetch("/api/me", { headers: authHeaders() })
           .then(function (r) {
             return r.json();
@@ -1515,18 +1438,14 @@
             }
           })
           .catch(function () {
-            // Ошибка сети — лучше показать вход, чем сломанную карту
             invalidateSession();
           });
       }
-      // invalidateSession(): сбрасывает авторизацию (чистит localStorage)
-      // и возвращает пользователя на экран входа.
       function invalidateSession() {
         currentUser = null;
         localStorage.removeItem("tver_user");
         showLoginScreen();
       }
-      // showLoginScreen(): закрывает главное приложение и показывает экран входа.
       function showLoginScreen() {
         var auth = document.getElementById("authScreen");
         var app = document.getElementById("mainApp");
@@ -2039,14 +1958,12 @@
         addrList.innerHTML =
           '<p style="padding:15px;color:var(--gray)">Поиск ближайших скамеек...</p>';
         addrList.style.display = "block";
-        fetch(
-          "https://nominatim.openstreetmap.org/search?format=json&q=" +
-            encodeURIComponent("Тверь, " + q)
-        )
+        fetch("/api/geocode?q=" + encodeURIComponent("Тверь, " + q))
           .then(function (r) {
             return r.json();
           })
-          .then(function (data) {
+          .then(function (resp) {
+            var data = resp.data || [];
             if (!data.length) {
               addrList.innerHTML = "";
               if (errEl) {
@@ -2145,15 +2062,13 @@
         list.innerHTML =
           '<p style="padding:14px;color:var(--gray)">Поиск...</p>';
         list.classList.add("active");
-          fetch(
-            "https://nominatim.openstreetmap.org/search?format=json&q=" +
-              encodeURIComponent("Тверь, " + q)
-          )
+          fetch("/api/geocode?q=" + encodeURIComponent("Тверь, " + q))
             .then(function (r) {
               return r.json();
             })
-            .then(function (data) {
+            .then(function (resp) {
               searchResults = [];
+              var data = resp.data || [];
               if (data.length) {
                 var c = [parseFloat(data[0].lat), parseFloat(data[0].lon)];
                 allBenches.forEach(function (b) {
@@ -3080,7 +2995,11 @@
            }
          }
        });
-       checkAuth();
+        checkAuth();
+        var tgBtn = document.getElementById("telegramLoginBtn");
+        if (tgBtn) {
+          tgBtn.addEventListener("click", telegramLogin);
+        }
       // Инициализируем swipe-to-close для карточки скамейки
       setTimeout(function () {
         initBenchCardSwipe();
