@@ -350,7 +350,7 @@
       .map-buttons {
         position: absolute;
         right: 15px;
-        bottom: 90px;
+        bottom: 24px;
         z-index: 1001;
         display: flex;
         flex-direction: column;
@@ -685,7 +685,7 @@
       #backToTop {
         display: none;
         position: absolute;
-        bottom: 170px;
+        bottom: 84px;
         left: 15px;
         width: 44px;
         height: 44px;
@@ -734,7 +734,7 @@
       /* Панель уведомлений (выпадает из-под колокна) */
       .notifications-panel {
         position: absolute;
-        bottom: 162px;
+        bottom: 76px;
         right: 15px;
         background: rgba(20, 22, 25, 0.9);
         border: 1px solid var(--card-border);
@@ -1156,7 +1156,8 @@
         reviewRating = 0,
         profileInterval = null,
         dragPlacemark = null,
-        isDraggingMarker = false;
+        isDraggingMarker = false,
+        addMapClickHandler = null;
       if (window.Telegram && window.Telegram.WebApp) {
         var tg = window.Telegram.WebApp;
         tg.ready();
@@ -1266,14 +1267,15 @@
         return headers;
       }
       function closeModal(id) {
-        // Прячет модальное окно, убирая у него класс "active"
         document.getElementById(id).classList.remove("active");
-        // Очистка при закрытии модального окна добавления скамейки
         if (id === "addModal") {
-          // Отписываемся от панорамирования карты и прячем центральный маркер
           if (myMap) {
             myMap.off("move", syncCenterCoords);
             myMap.off("moveend", syncCenterCoords);
+            if (addMapClickHandler) {
+              myMap.off("click", addMapClickHandler);
+              addMapClickHandler = null;
+            }
           }
           var overlay = document.getElementById("markerDragOverlay");
           if (overlay) overlay.style.display = "none";
@@ -2246,27 +2248,20 @@
         document.getElementById("addModalContent").innerHTML =
           '<div class="form-group"><label>Фото</label><input type="file" id="modalPhotoInput" accept="image/*" capture="environment" multiple></div><div id="photoPreview" style="display:flex;gap:10px;flex-wrap:wrap"></div><div class="form-group"><label>Описание</label><textarea id="modalBenchDesc" rows="3"></textarea></div><div class="form-group" style="text-align:center"><i class="fa-solid fa-map-pin" style="color:var(--primary);font-size:1.5em"></i><div id="benchCoords" style="font-size:12px;color:var(--gray);margin-top:5px">Координаты: загружаются...</div></div><div style="display:flex;gap:10px;justify-content:flex-end"><button class="btn primary" onclick="saveBench()">Отправить</button><button class="btn" type="button" onclick="closeModal(\'addModal\')">Отмена</button></div>';
         document.getElementById("addModal").classList.add("active");
-        // Центральный маркер (overlay) в центре экрана — цель для размещения
-        // скамейки. Пользователь панорамирует карту, а координаты скамейки
-        // берутся из центра карты (userPosition синхронизируется в
-        // syncCenterCoords). Маркер остаётся в центре экрана.
         var overlay = document.getElementById("markerDragOverlay");
         if (overlay) overlay.style.display = "flex";
         if (myMap) {
-          // Центрируем карту на геолокации, чтобы маркер оказался в центре
           myMap.setView([userPosition.lat, userPosition.lng], 16);
           myMap.on("move", syncCenterCoords);
           myMap.on("moveend", syncCenterCoords);
           syncCenterCoords();
-        } else {
-          var coordsEl = document.getElementById("benchCoords");
-          if (coordsEl) {
-            coordsEl.textContent =
-              "Координаты: " +
-              userPosition.lat.toFixed(5) +
-              ", " +
-              userPosition.lng.toFixed(5);
-          }
+          addMapClickHandler = function (e) {
+            if (!document.getElementById("addModal").classList.contains("active")) return;
+            userPosition = { lat: e.latlng.lat, lng: e.latlng.lng };
+            myMap.setView([userPosition.lat, userPosition.lng], myMap.getZoom());
+            syncCenterCoords();
+          };
+          myMap.on("click", addMapClickHandler);
         }
         document
           .getElementById("modalPhotoInput")
