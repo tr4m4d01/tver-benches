@@ -56,39 +56,31 @@
          ======================================================================= */
 
       /* Цветовая схема и базовые параметры (CSS-переменные).
-         --primary        — основной синий цвет кнопок и акцентов
-         --primary-dark   — тёмный оттенок для нажатия
-         --page-bg        — фон всей страницы (ярко-синий)
-         --card           — цвет карточек (белый)
-         --text / --gray  — тёмный и серый цвета текста
-         --input-bg       — фон полей ввода (светло-серый)
-         --shadow-*       — мягкие тени для карточек и кнопок */
+         Акцент — приглушённый зелёно-синий. Фон — тёмный градиент.
+         Карточки — полупрозрачные стеклянные панели. */
       :root {
-        --primary: #5b75f8;
-        --primary-dark: #4a5fe0;
-        --page-bg: #5b75f8;
-        --card: #ffffff;
-        --text: #1f2937;
+        --primary: #6C8B8C;
+        --primary-dark: #5a7677;
+        --page-bg: #0b0d0f;
+        --card: rgba(255, 255, 255, 0.06);
+        --card-border: rgba(255, 255, 255, 0.08);
+        --text: #e8e8e8;
         --gray: #9ca3af;
-        --border: #e5e7eb;
-        --input-bg: #f0f2fa;
-        --soft: #f9fafb;
-        --green: #27ae60;
-        --red: #e74c3c;
-        --yellow: #ffd700;
-        --shadow-card: 0 10px 30px rgba(17, 24, 39, 0.08);
-        --shadow-soft: 0 4px 15px rgba(17, 24, 39, 0.1);
-        --shadow-btn: 0 4px 12px rgba(91, 117, 248, 0.35);
+        --border: rgba(255, 255, 255, 0.08);
+        --input-bg: rgba(255, 255, 255, 0.05);
+        --soft: rgba(255, 255, 255, 0.03);
+        --green: #6C8B8C;
+        --red: #c45c5c;
+        --yellow: #c4a35a;
+        --shadow-card: 0 10px 30px rgba(0, 0, 0, 0.4);
+        --shadow-soft: 0 4px 15px rgba(0, 0, 0, 0.3);
+        --shadow-btn: 0 4px 12px rgba(108, 139, 140, 0.25);
       }
       * {
         margin: 0;
         padding: 0;
         box-sizing: border-box;
       }
-      /* Базовые стили страницы: шрифт Inter, синий фон, тёмный текст.
-         height:100dvh — высота экрана с учётом мобильных браузеров.
-         overflow:hidden — запрещаем прокрутку всей страницы (скроллятся
-         только внутренние блоки, например карточка скамейки). */
       body {
         font-family:
           "Inter",
@@ -107,15 +99,12 @@
         -webkit-font-smoothing: antialiased;
       }
       #authScreen {
-        /* Экран входа/регистрации. position:fixed + flex по центру делают
-           его «полноэкранной карточкой» поверх всего. z-index:5000 ставит
-           его выше карты. Класс .hidden (display:none) прячет экран после входа. */
         position: fixed;
         top: 0;
         left: 0;
         right: 0;
         bottom: 0;
-        background: var(--page-bg);
+        background: radial-gradient(ellipse at top, #141619 0%, #0b0d0f 60%);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -127,41 +116,43 @@
         display: none;
       }
       .auth-card {
-        /* Белая карточка формы: скруглённые углы 20px и мягкая тень */
         background: var(--card);
+        border: 1px solid var(--card-border);
         border-radius: 20px;
-        box-shadow: var(--shadow-card);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
         padding: 32px 28px;
         width: 100%;
         max-width: 400px;
       }
       .auth-logo {
         text-align: center;
-        font-size: 3.5em;
+        font-size: 2.4em;
         color: var(--primary);
         margin-bottom: 16px;
       }
       .auth-title {
         text-align: center;
-        font-size: 20px;
+        font-size: 18px;
         font-weight: 700;
         color: var(--text);
         margin-bottom: 8px;
+        letter-spacing: 0.2px;
       }
       .auth-subtitle {
         text-align: center;
-        font-size: 14px;
+        font-size: 13px;
         color: var(--gray);
         margin-bottom: 24px;
       }
       .auth-tabs {
-        /* Переключатель «Вход / Регистрация» в виде сегментированной кнопки */
         display: flex;
         gap: 10px;
         margin-bottom: 20px;
-        background: var(--input-bg);
+        background: rgba(255, 255, 255, 0.04);
         padding: 5px;
         border-radius: 10px;
+        border: 1px solid var(--border);
       }
       .auth-tab {
         flex: 1;
@@ -175,9 +166,9 @@
         transition: 0.2s;
       }
       .auth-tab.active {
-        background: var(--card);
+        background: rgba(108, 139, 140, 0.15);
         color: var(--primary);
-        box-shadow: 0 2px 8px rgba(17, 24, 39, 0.08);
+        border: 1px solid rgba(108, 139, 140, 0.35);
       }
       .form-group {
         margin-bottom: 15px;
@@ -188,13 +179,14 @@
         margin-bottom: 6px;
         font-size: 13px;
         color: var(--gray);
+        letter-spacing: 0.3px;
       }
       .form-group input,
       .form-group textarea,
       .form-group select {
         width: 100%;
         padding: 14px;
-        border: 1px solid transparent;
+        border: 1px solid var(--border);
         border-radius: 10px;
         font-size: 14px;
         outline: none;
@@ -205,24 +197,30 @@
       .form-group input:focus,
       .form-group textarea:focus,
       .form-group select:focus {
-        border-color: var(--primary);
-        background: #fff;
+        border-color: rgba(108, 139, 140, 0.45);
+        background: rgba(255, 255, 255, 0.08);
       }
       .btn {
         width: 100%;
         padding: 15px;
-        border: none;
+        border: 1px solid rgba(108, 139, 140, 0.45);
         border-radius: 10px;
-        font-size: 15px;
-        font-weight: 700;
+        font-size: 14px;
+        font-weight: 600;
         cursor: pointer;
-        background: var(--primary);
-        color: #fff;
+        background: rgba(108, 139, 140, 0.12);
+        color: var(--text);
         font-family: inherit;
         transition: 0.2s;
+        letter-spacing: 0.3px;
       }
       .btn:active {
-        background: var(--primary-dark);
+        background: rgba(108, 139, 140, 0.22);
+      }
+      .btn.primary {
+        background: rgba(108, 139, 140, 0.25);
+        border-color: rgba(108, 139, 140, 0.55);
+        color: #fff;
       }
       .btn i {
         margin-right: 6px;
@@ -241,15 +239,14 @@
         display: flex;
       }
       #map {
-        /* Контейнер карты Leaflet: занимает весь экран под mainApp */
         position: absolute;
         top: 0;
         left: 0;
         right: 0;
         bottom: 0;
+        background: #0b0d0f;
       }
       .search-container {
-        /* Плавающая строка поиска сверху экрана поверх карты */
         position: absolute;
         top: 15px;
         left: 15px;
@@ -257,10 +254,11 @@
         z-index: 2000;
       }
       .search-bar {
-        /* Белая «пилюля» поиска с мягкой тенью */
-        background: var(--card);
-        border-radius: 20px;
-        box-shadow: var(--shadow-soft);
+        background: rgba(20, 22, 25, 0.75);
+        border: 1px solid var(--card-border);
+        border-radius: 14px;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
         padding: 12px 16px;
         display: flex;
         align-items: center;
@@ -268,7 +266,7 @@
       }
       .search-bar > i {
         color: var(--gray);
-        font-size: 1em;
+        font-size: 0.95em;
       }
       .search-bar input {
         flex: 1;
@@ -280,12 +278,12 @@
         font-family: inherit;
       }
       .search-bar input::placeholder {
-        color: var(--gray);
+        color: rgba(255, 255, 255, 0.35);
       }
       .search-btn {
-        border: none;
-        background: var(--primary);
-        color: #fff;
+        border: 1px solid rgba(108, 139, 140, 0.4);
+        background: rgba(108, 139, 140, 0.18);
+        color: var(--text);
         width: 42px;
         height: 42px;
         border-radius: 12px;
@@ -297,18 +295,22 @@
         flex-shrink: 0;
       }
       #addressResults {
-        background: var(--card);
-        border-radius: 16px;
-        box-shadow: var(--shadow-soft);
+        background: rgba(20, 22, 25, 0.8);
+        border: 1px solid var(--card-border);
+        border-radius: 14px;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
         margin-top: 8px;
         max-height: calc(100vh - 350px);
         overflow-y: auto;
         -webkit-overflow-scrolling: touch;
       }
       #searchResultsList {
-        background: var(--card);
-        border-radius: 16px;
-        box-shadow: var(--shadow-soft);
+        background: rgba(20, 22, 25, 0.8);
+        border: 1px solid var(--card-border);
+        border-radius: 14px;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
         z-index: 2500;
         max-height: 250px;
         overflow-y: auto;
@@ -341,13 +343,11 @@
         color: var(--text);
       }
       .search-result-item .dist {
-        color: var(--green);
+        color: var(--primary);
         font-weight: 700;
         font-size: 13px;
       }
       .map-buttons {
-        /* Плавающие кнопки действий (геолокация, добавить, профиль и т.д.).
-           Прижаты к нижнему правому углу поверх карты. */
         position: absolute;
         right: 15px;
         bottom: 90px;
@@ -357,43 +357,41 @@
         gap: 12px;
       }
       .map-btn {
-        /* Отдельная круглая кнопка-«пилюля» белого цвета с тенью */
         position: relative;
-        width: 52px;
-        height: 52px;
-        border-radius: 16px;
-        background: var(--card);
-        box-shadow: var(--shadow-soft);
+        width: 48px;
+        height: 48px;
+        border-radius: 14px;
+        background: rgba(20, 22, 25, 0.75);
+        border: 1px solid var(--card-border);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
         cursor: pointer;
-        font-size: 1.1em;
+        font-size: 1.05em;
         color: var(--text);
         display: flex;
         align-items: center;
         justify-content: center;
-        border: none;
         transition: 0.2s;
       }
       .map-btn:active {
         transform: scale(0.94);
       }
       .map-btn.primary {
-        /* Главная кнопка (например, «добавить скамейку») — синяя */
-        background: var(--primary);
+        background: rgba(108, 139, 140, 0.25);
+        border-color: rgba(108, 139, 140, 0.55);
         color: #fff;
-        box-shadow: var(--shadow-btn);
       }
       .bench-card {
-        /* Нижняя выезжающая карточка с деталями скамейки.
-           По умолчанию сдвинута вниз (translateY(100%)) и скрыта; класс
-           .active возвращает её на место. max-height + overflow делают
-           карточку прокручиваемой, если контента много. */
         position: absolute;
         bottom: 0;
         left: 0;
         right: 0;
-        background: var(--card);
-        border-radius: 20px 20px 0 0;
-        box-shadow: 0 -6px 30px rgba(17, 24, 39, 0.18);
+        background: rgba(18, 20, 23, 0.85);
+        border: 1px solid var(--card-border);
+        border-bottom: none;
+        border-radius: 18px 18px 0 0;
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
         z-index: 1500;
         max-height: 75vh;
         overflow-y: auto;
@@ -407,7 +405,7 @@
       .bench-card-handle {
         width: 44px;
         height: 5px;
-        background: #d1d5db;
+        background: rgba(255, 255, 255, 0.2);
         border-radius: 3px;
         margin: 12px auto;
         cursor: pointer;
@@ -416,19 +414,20 @@
         padding: 0 20px 20px;
       }
       .bench-card-title {
-        font-size: 20px;
+        font-size: 18px;
         font-weight: 700;
         color: var(--text);
+        letter-spacing: 0.2px;
       }
       .bench-card-title i {
         color: var(--primary);
         margin-right: 8px;
       }
       .bench-card-distance {
-        color: var(--green);
+        color: var(--primary);
         font-weight: 700;
         margin: 6px 0;
-        font-size: 14px;
+        font-size: 13px;
       }
       .bench-card-desc {
         color: var(--gray);
@@ -458,70 +457,76 @@
       .bench-card-btn {
         flex: 1;
         padding: 14px;
-        border: none;
+        border: 1px solid var(--border);
         border-radius: 12px;
-        font-weight: 700;
+        font-weight: 600;
         cursor: pointer;
         font-size: 14px;
         font-family: inherit;
+        background: rgba(255, 255, 255, 0.04);
+        color: var(--text);
       }
       .bench-card-btn i {
         margin-right: 5px;
       }
       .btn-route {
-        background: var(--primary);
-        color: #fff;
+        background: rgba(108, 139, 140, 0.2);
+        border-color: rgba(108, 139, 140, 0.4);
+        color: var(--text);
       }
       .btn-reviews {
-        background: var(--input-bg);
+        background: rgba(255, 255, 255, 0.04);
+        border-color: var(--border);
         color: var(--text);
       }
       .btn-fav {
-        background: var(--input-bg);
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid var(--border);
         width: 50px;
         flex: none;
         color: var(--gray);
-        font-size: 1.3em;
+        font-size: 1.2em;
         cursor: pointer;
-        border: none;
         border-radius: 12px;
       }
       .btn-fav.active {
-        color: var(--red);
-        background: #fdeceb;
+        color: var(--primary);
+        background: rgba(108, 139, 140, 0.15);
+        border-color: rgba(108, 139, 140, 0.35);
       }
       .btn-report {
-        background: var(--input-bg);
+        background: rgba(255, 255, 255, 0.04);
+        border: 1px solid var(--border);
         width: 50px;
         flex: none;
         color: var(--gray);
         cursor: pointer;
-        border: none;
         border-radius: 12px;
         font-size: 1.1em;
       }
       .btn-like {
-        background: var(--input-bg);
+        background: rgba(255, 255, 255, 0.04);
         padding: 14px;
         border-radius: 12px;
-        font-weight: 700;
+        font-weight: 600;
         cursor: pointer;
         color: var(--text);
         display: flex;
         align-items: center;
         justify-content: center;
         gap: 5px;
-        border: none;
+        border: 1px solid var(--border);
         font-size: 14px;
         font-family: inherit;
       }
       .btn-like.active {
         color: var(--primary);
-        background: #eef1fe;
+        background: rgba(108, 139, 140, 0.12);
+        border-color: rgba(108, 139, 140, 0.35);
       }
       .close-btn {
-        background: rgba(91, 117, 248, 0.12);
-        border: none;
+        background: rgba(108, 139, 140, 0.12);
+        border: 1px solid rgba(108, 139, 140, 0.3);
         color: var(--primary);
         width: 44px;
         height: 44px;
@@ -533,10 +538,9 @@
         font-size: 1em;
         flex-shrink: 0;
       }
-      /* Кнопка «назад» (стрелка) в шапке модального окна */
       .modal-nav {
-        background: rgba(91, 117, 248, 0.12);
-        border: none;
+        background: rgba(108, 139, 140, 0.12);
+        border: 1px solid rgba(108, 139, 140, 0.3);
         color: var(--primary);
         width: 44px;
         height: 44px;
@@ -549,16 +553,13 @@
         flex-shrink: 0;
       }
       .modal {
-        /* Всплывающее модальное окно (профиль, отзывы, добавить скамейку).
-           Полупрозрачная подложка + центрированная карточка. Скрыто по
-           умолчанию (display:none); класс .active показывает его. */
         display: none;
         position: fixed;
         top: 0;
         left: 0;
         right: 0;
         bottom: 0;
-        background: rgba(17, 24, 39, 0.45);
+        background: rgba(0, 0, 0, 0.55);
         z-index: 99999;
         align-items: center;
         justify-content: center;
@@ -568,10 +569,11 @@
         display: flex !important;
       }
       .modal-content {
-        /* Белая карточка содержимого модального окна */
-        background: var(--card);
+        background: rgba(22, 24, 28, 0.92);
+        border: 1px solid var(--card-border);
         border-radius: 20px;
-        box-shadow: var(--shadow-card);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
         padding: 24px;
         width: 100%;
         max-width: 500px;
@@ -594,25 +596,24 @@
         top: 20px;
         left: 50%;
         transform: translateX(-50%);
-        background: var(--primary);
-        color: #fff;
+        background: rgba(108, 139, 140, 0.25);
+        border: 1px solid rgba(108, 139, 140, 0.45);
+        color: var(--text);
         padding: 12px 20px;
         border-radius: 10px;
         z-index: 100000;
         font-weight: 600;
         font-size: 14px;
-        box-shadow: var(--shadow-btn);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
       }
       .overlay-modal {
-        /* Небольшие всплывающие окна (уведомления, подтверждения, формы
-           жалобы/отзыва). Похожи на .modal, но с более тёмной подложкой и
-           меньшей карточкой. Создаются динамически в JavaScript. */
         position: fixed;
         top: 0;
         left: 0;
         right: 0;
         bottom: 0;
-        background: rgba(17, 24, 39, 0.5);
+        background: rgba(0, 0, 0, 0.6);
         z-index: 100000;
         display: flex;
         align-items: center;
@@ -620,9 +621,11 @@
         padding: 20px;
       }
       .overlay-box {
-        background: var(--card);
+        background: rgba(22, 24, 28, 0.92);
+        border: 1px solid var(--card-border);
         border-radius: 20px;
-        box-shadow: var(--shadow-card);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
         padding: 28px 24px;
         text-align: center;
         max-width: 360px;
@@ -638,16 +641,16 @@
       }
       .review-item {
         padding: 16px;
-        background: var(--soft);
+        background: rgba(255, 255, 255, 0.03);
+        border: 1px solid var(--border);
         border-radius: 14px;
         margin-bottom: 12px;
-        border: 1px solid var(--border);
       }
       .profile-stat {
         flex: 1;
         text-align: center;
         padding: 16px;
-        background: var(--soft);
+        background: rgba(255, 255, 255, 0.03);
         border: 1px solid var(--border);
         border-radius: 14px;
       }
@@ -665,16 +668,18 @@
         display: inline-block;
         padding: 8px 12px;
         border-radius: 10px;
-        background: var(--input-bg);
+        background: rgba(108, 139, 140, 0.12);
+        border: 1px solid rgba(108, 139, 140, 0.25);
         margin: 5px;
         font-size: 13px;
         color: var(--text);
       }
       .section-title {
-        font-size: 18px;
+        font-size: 16px;
         font-weight: 700;
         color: var(--text);
         margin: 20px 0 10px;
+        letter-spacing: 0.3px;
       }
       /* Кнопка "вверх" (прокрутка к верху) */
       #backToTop {
@@ -685,8 +690,10 @@
         width: 44px;
         height: 44px;
         border-radius: 14px;
-        background: var(--card);
-        box-shadow: var(--shadow-soft);
+        background: rgba(20, 22, 25, 0.75);
+        border: 1px solid var(--card-border);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
         align-items: center;
         justify-content: center;
         font-size: 1.2em;
@@ -703,7 +710,7 @@
         left: 0;
         right: 0;
         bottom: 0;
-        background: var(--page-bg);
+        background: #0b0d0f;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -716,23 +723,24 @@
         pointer-events: none;
       }
       #mapPreloader i {
-        font-size: 3em;
-        color: #fff;
+        font-size: 2.4em;
+        color: var(--primary);
         margin-bottom: 15px;
       }
       #mapPreloader .loading-text {
-        color: #fff;
-        font-size: 14px;
+        color: var(--gray);
+        font-size: 13px;
       }
       /* Панель уведомлений (выпадает из-под колокна) */
       .notifications-panel {
         position: absolute;
         bottom: 162px;
         right: 15px;
-        background: var(--card);
+        background: rgba(20, 22, 25, 0.9);
+        border: 1px solid var(--card-border);
         border-radius: 16px;
-        box-shadow: var(--shadow-card);
-        border: 1px solid var(--border);
+        backdrop-filter: blur(16px);
+        -webkit-backdrop-filter: blur(16px);
         width: 300px;
         max-height: 400px;
         overflow-y: auto;
@@ -773,7 +781,7 @@
         border-bottom: none;
       }
       .notif-item.unread {
-        background: #f0f4ff;
+        background: rgba(108, 139, 140, 0.08);
       }
       .notif-item .notif-msg {
         font-size: 13px;
@@ -806,8 +814,7 @@
         height: 40px;
         border-radius: 50%;
         object-fit: cover;
-        border: 2px solid var(--card);
-        box-shadow: var(--shadow-soft);
+        border: 1px solid var(--card-border);
       }
       .avatar-sm {
         width: 32px;
@@ -819,21 +826,19 @@
         width: 40px;
         height: 40px;
         border-radius: 50%;
-        background: var(--primary);
+        background: rgba(108, 139, 140, 0.25);
         display: flex;
         align-items: center;
         justify-content: center;
         color: #fff;
         font-size: 1.4em;
-        border: 2px solid var(--card);
-        box-shadow: var(--shadow-soft);
-        object-fit: cover;
+        border: 1px solid rgba(108, 139, 140, 0.4);
       }
       .avatar-default-sm {
         width: 32px;
         height: 32px;
         border-radius: 50%;
-        background: var(--primary);
+        background: rgba(108, 139, 140, 0.25);
         display: flex;
         align-items: center;
         justify-content: center;
@@ -842,8 +847,8 @@
       }
       /* Ошибка поиска */
       .search-error {
-        background: #fdecec;
-        border: 1px solid var(--red);
+        background: rgba(196, 92, 92, 0.12);
+        border: 1px solid rgba(196, 92, 92, 0.35);
         color: var(--red);
         border-radius: 12px;
         padding: 12px 16px;
@@ -896,9 +901,9 @@
       }
       /* Admin comment badge in bench card */
       .admin-comment-badge {
-        background: #fff3cd;
-        border: 1px solid var(--yellow);
-        color: #856404;
+        background: rgba(196, 163, 90, 0.12);
+        border: 1px solid rgba(196, 163, 90, 0.35);
+        color: var(--yellow);
         border-radius: 10px;
         padding: 10px 14px;
         margin-top: 10px;
@@ -913,7 +918,7 @@
         #mainApp {
           max-width: 480px;
           margin: 0 auto;
-          box-shadow: 0 0 50px rgba(0, 0, 0, 0.25);
+          box-shadow: 0 0 50px rgba(0, 0, 0, 0.5);
         }
         .auth-card {
           max-width: 420px;
@@ -933,13 +938,13 @@
       =====================================================================
     -->
 
-    <!-- ЭКРАН ВХОДА: форма авторизации и регистрации -->
+     <!-- ЭКРАН ВХОДА: форма авторизации и регистрации -->
     <div id="authScreen">
       <div class="auth-card">
         <div class="auth-logo"><i class="fa-solid fa-location-dot"></i></div>
         <div class="auth-title">Скамейки Твери</div>
         <div class="auth-subtitle">
-          Находите лучшие скамейки Твери рядом с вами
+          Карта мест Твери
         </div>
         <div class="auth-tabs">
           <div class="auth-tab active" onclick="showLogin()">Вход</div>
@@ -979,7 +984,7 @@
       <!-- Индикатор загрузки карты (показывается пока карта готовится) -->
       <div id="mapPreloader">
         <i class="fa-solid fa-spinner fa-spin"></i>
-        <div class="loading-text">Загрузка карты...</div>
+        <div class="loading-text">Загрузка...</div>
       </div>
       <!-- Контейнер карты Leaflet (в него монтируется карта из JS) -->
       <div id="map"></div>
@@ -991,7 +996,7 @@
           <i class="fa-solid fa-magnifying-glass"></i
           ><input
             type="text"
-            placeholder="Поиск по адресу..."
+            placeholder="Поиск..."
             id="searchInput"
             oninput="searchBenches()"
           /><button
@@ -1044,15 +1049,15 @@
         <button class="map-btn primary" onclick="openAddModal()">
           <i class="fa-solid fa-plus"></i>
         </button>
-        <!-- Обновить список скамеек -->
+        <!-- Обновить -->
         <button class="map-btn" onclick="loadBenches()">
           <i class="fa-solid fa-rotate"></i>
         </button>
-        <!-- Открыть профиль -->
+        <!-- Профиль -->
         <button class="map-btn" onclick="openProfile()">
           <i class="fa-solid fa-user"></i>
         </button>
-        <!-- Топ пользователей -->
+        <!-- Топ -->
         <button class="map-btn" onclick="openTopUsers()">
           <i class="fa-solid fa-trophy"></i>
         </button>
@@ -1095,8 +1100,8 @@
           <button class="modal-nav" onclick="closeModal('addModal')">
             <i class="fa-solid fa-arrow-left"></i>
           </button>
-          <h2>Новая скамейка</h2>
-          <button class="close-btn" onclick="closeModal('addModal')">✕</button>
+          <h2>Новое место</h2>
+          <button class="close-btn" onclick="closeModal('addModal')"></button>
         </div>
         <div id="addModalContent"></div>
       </div>
@@ -1361,19 +1366,15 @@
           t.remove();
         }, 3000);
       }
-      function showOverlay(icon, color, title, msg) {
+      function showOverlay(title, msg) {
         var o = document.createElement("div");
         o.className = "overlay-modal";
         o.innerHTML =
-          '<div class="overlay-box"><div style="font-size:3em;color:' +
-          color +
-          ';margin-bottom:15px"><i class="fa-solid ' +
-          icon +
-          '"></i></div><h3>' +
+          '<div class="overlay-box"><h3>' +
           escapeHtml(title) +
           '</h3><p style="color:var(--gray);margin:10px 0 20px">' +
           escapeHtml(msg) +
-          '</p><button class="btn" onclick="this.closest(\'.overlay-modal\').remove()">OK</button></div>';
+          '</p><button class="btn" onclick="this.closest(\'.overlay-modal\').remove()">Закрыть</button></div>';
         o.addEventListener("click", function (e) {
           if (e.target === o) o.remove();
         });
@@ -1433,10 +1434,10 @@
           })
           .then(function (d) {
             if (d.success) {
-              showToast("Регистрация успешна! Теперь войдите.");
+              showToast("Регистрация завершена");
               showLogin();
             } else {
-              showToast(d.error || "Ошибка регистрации");
+              showToast(d.error || "Не удалось завершить регистрацию");
             }
           });
       }
@@ -1445,7 +1446,7 @@
         var l = document.getElementById("loginLogin").value.trim(),
           p = document.getElementById("loginPassword").value;
         if (!l || !p) {
-          showToast("Введите данные");
+          showToast("Введите логин и пароль");
           return;
         }
         fetch("/api/login", {
@@ -1468,7 +1469,7 @@
                 updateNotifBadge();
               }, 500);
             } else {
-              showToast(d.error || "Ошибка входа");
+              showToast(d.error || "Не удалось войти");
             }
           });
       }
@@ -1551,7 +1552,7 @@
               myMap.setView([userPosition.lat, userPosition.lng], 16);
             },
             function () {
-              showToast("Не удалось определить геопозицию");
+              showToast("Не удалось определить местоположение");
             },
           );
         }
@@ -1729,7 +1730,7 @@
       }
       function buildRoute() {
         if (!selectedBench || !userPosition) {
-          showToast("Определите гео");
+          showToast("Определите местоположение");
           return;
         }
         // Открываем маршрут во внешнем карте (Google Maps)
@@ -1751,7 +1752,7 @@
       // подсвечивает кнопку (#likeBtn-id) классом "active".
       function toggleLike(id) {
         if (!currentUser) {
-          showToast("Войдите");
+          showToast("Требуется вход");
           return;
         }
         fetch("/api/benches/" + id + "/like", {
@@ -1777,13 +1778,13 @@
                   btn.classList.remove("active");
                 }
               }
-              showToast(d.liked ? "Лайк!" : "Лайк убран");
+              showToast("Лайк");
             } else {
-              showToast(d.error || "Ошибка");
+              showToast("Не удалось");
             }
           })
           .catch(function (e) {
-            showToast("Ошибка соединения с сервером");
+            showToast("Ошибка соединения");
           });
       }
       // ---- СИСТЕМА ИЗБРАННОГО ----------------------------------------------
@@ -1792,7 +1793,7 @@
       // классом "active" красным цветом, если добавлено.
       function toggleFav(id) {
         if (!currentUser) {
-          showToast("Войдите");
+          showToast("Требуется вход");
           return;
         }
         fetch("/api/benches/" + id + "/favorite", {
@@ -1807,7 +1808,7 @@
             return r.json();
           })
           .then(function (d) {
-            showToast(d.favorited ? "Добавлено!" : "Удалено!");
+            showToast(d.favorited ? "Добавлено" : "Удалено");
             var favBtn = document.getElementById("favBtn-" + id);
             if (favBtn) {
               if (d.favorited) {
@@ -1820,7 +1821,7 @@
       }
       function reportBench(id) {
         if (!currentUser) {
-          showToast("Войдите");
+          showToast("Требуется вход");
           return;
         }
         var o = document.createElement("div");
@@ -1858,11 +1859,11 @@
               });
               showToast("Жалоба отправлена");
             } else {
-              showToast(d.error || "Ошибка");
+              showToast("Не удалось");
             }
           })
           .catch(function (e) {
-            showToast("Ошибка соединения с сервером");
+            showToast("Ошибка соединения");
           });
       }
       function openReviews(id) {
@@ -1964,7 +1965,7 @@
           return;
         }
         if (containsBadWords(c)) {
-          showOverlay("fa-xmark", "#e74c3c", "Ошибка", "Мат!");
+          showToast("Некорректный текст");
           return;
         }
         var files = document.getElementById("reviewPhotos").files;
@@ -1988,7 +1989,7 @@
               document.querySelectorAll(".overlay-modal").forEach(function (e) {
                 e.remove();
               });
-              showToast("Отзыв отправлен!");
+              showToast("Отзыв отправлен");
             } else {
               showToast(d.error);
             }
@@ -2088,7 +2089,7 @@
           .catch(function () {
             addrList.innerHTML = "";
             if (errEl) {
-              errEl.textContent = "Ошибка поиска. Попробуйте позже.";
+              errEl.textContent = "Поиск недоступен";
               errEl.classList.add("active");
             }
           });
@@ -2235,15 +2236,15 @@
       }
       function openAddModal() {
         if (!currentUser) {
-          showToast("Войдите");
+          showToast("Требуется вход");
           return;
         }
         if (!userPosition) {
-          showToast("Нажмите локацию");
+          showToast("Определите местоположение");
           return;
         }
         document.getElementById("addModalContent").innerHTML =
-          '<div class="form-group"><label>Фото (обязательно!)</label><input type="file" id="modalPhotoInput" accept="image/*" capture="environment" multiple></div><div id="photoPreview" style="display:flex;gap:10px;flex-wrap:wrap"></div><div class="form-group"><label>Описание</label><textarea id="modalBenchDesc" rows="3"></textarea></div><div class="form-group" style="text-align:center"><i class="fa-solid fa-map-pin" style="color:var(--primary);font-size:1.5em"></i><div id="benchCoords" style="font-size:12px;color:var(--gray);margin-top:5px">Координаты: загружаются...</div></div><div style="display:flex;gap:10px;justify-content:flex-end"><button class="btn" onclick="saveBench()">Сохранить</button><button class="btn" type="button" style="background:rgba(148,163,184);color:#fff" onclick="closeModal(\'addModal\')">Отмена</button></div>';
+          '<div class="form-group"><label>Фото</label><input type="file" id="modalPhotoInput" accept="image/*" capture="environment" multiple></div><div id="photoPreview" style="display:flex;gap:10px;flex-wrap:wrap"></div><div class="form-group"><label>Описание</label><textarea id="modalBenchDesc" rows="3"></textarea></div><div class="form-group" style="text-align:center"><i class="fa-solid fa-map-pin" style="color:var(--primary);font-size:1.5em"></i><div id="benchCoords" style="font-size:12px;color:var(--gray);margin-top:5px">Координаты: загружаются...</div></div><div style="display:flex;gap:10px;justify-content:flex-end"><button class="btn primary" onclick="saveBench()">Отправить</button><button class="btn" type="button" onclick="closeModal(\'addModal\')">Отмена</button></div>';
         document.getElementById("addModal").classList.add("active");
         // Центральный маркер (overlay) в центре экрана — цель для размещения
         // скамейки. Пользователь панорамирует карту, а координаты скамейки
@@ -2309,16 +2310,16 @@
         var d = document.getElementById("modalBenchDesc").value.trim(),
           f = document.getElementById("modalPhotoInput").files;
         if (!f.length) {
-          showOverlay("fa-xmark", "#e74c3c", "Ошибка", "Фото обязательно!");
+          showToast("Фото обязательно");
           return;
         }
         if (!validateFileSize(f, 10)) return;
         if (!userPosition) {
-          showToast("Сначала определите геопозицию");
+          showToast("Определите местоположение");
           return;
         }
         if (containsBadWords(d)) {
-          showOverlay("fa-xmark", "#e74c3c", "Ошибка", "Мат!");
+          showToast("Некорректный текст");
           return;
         }
         var fd = new FormData();
@@ -2340,11 +2341,9 @@
           .then(function (d) {
             if (d.success) {
               closeModal("addModal");
-              showToast("Отправлено на модерацию!");
+              showToast("Отправлено на модерацию");
             } else {
               showOverlay(
-                "fa-xmark",
-                "#e74c3c",
                 "Ошибка",
                 d.error || "Не удалось добавить",
               );
@@ -2352,8 +2351,6 @@
           })
           .catch(function () {
             showOverlay(
-              "fa-xmark",
-              "#e74c3c",
               "Ошибка",
               "Ошибка соединения с сервером",
             );
@@ -2361,7 +2358,7 @@
       }
       function showNearby() {
         if (!userPosition) {
-          showToast("Определите гео");
+          showToast("Определите местоположение");
           return;
         }
         var near = allBenches
@@ -2413,7 +2410,7 @@
           closeModal("profileModal");
           showBenchCard(bench);
         } else {
-          showToast("Эта скамейка еще не одобрена");
+          showToast("Не одобрено");
         }
       }
       function openTopUsers() {
@@ -2431,7 +2428,7 @@
                 avatarHtml(u.avatar, u.nickname, "sm") +
                 '<span class="name" style="margin-left:4px">' +
                 escapeHtml(u.nickname) +
-                '</span><span class="dist">⭐' +
+                '</span><span class="dist">' +
                 u.reputation +
                 "</span></div>";
             });
@@ -2441,7 +2438,7 @@
       }
       function openProfile() {
         if (!currentUser) {
-          showToast("Войдите");
+          showToast("Требуется вход");
           return;
         }
         // Fetch full profile (phone, email, avatar) from server
@@ -2496,25 +2493,23 @@
           escapeHtml(currentUser.email || "—") +
           "</span></div></div>";
         h +=
-          '<button class="btn" style="margin-bottom:15px" onclick="openEditProfile()">Редактировать профиль</button>';
-        // Уведомления пользователя
+          '<button class="btn" style="margin-bottom:15px" onclick="openEditProfile()">Редактировать</button>';
         h +=
           '<div class="section-title">Уведомления</div><div id="userNotifBox" style="max-height:150px;overflow-y:auto;-webkit-overflow-scrolling:touch">Загрузка...</div>';
-        // Кнопка очистки уведомлений
         h +=
-          '<button class="btn" style="margin-top:8px;background:var(--input-bg);color:var(--gray)" onclick="clearUserNotifications()">Очистить уведомления</button>';
+          '<button class="btn" style="margin-top:8px;background:rgba(255,255,255,0.04);color:var(--gray)" onclick="clearUserNotifications()">Очистить</button>';
         h +=
           '<div class="section-title">Достижения</div><div id="badgesBox">Загрузка...</div>';
         h +=
-          '<div class="section-title">Мои скамейки</div><div id="myBenchesBox" style="max-height:200px;overflow-y:auto;-webkit-overflow-scrolling:touch">Загрузка...</div>';
+          '<div class="section-title">Мои места</div><div id="myBenchesBox" style="max-height:200px;overflow-y:auto;-webkit-overflow-scrolling:touch">Загрузка...</div>';
         h +=
           '<div class="section-title">Избранное</div><div id="myFavBox">Загрузка...</div>';
         h +=
           '<div class="section-title">Отзывы</div><div id="myReviewsBox">Загрузка...</div>';
         h +=
-          '<div class="section-title">Мои жалобы</div><div id="myReportsBox" style="max-height:200px;overflow-y:auto;-webkit-overflow-scrolling:touch">Загрузка...</div>';
+          '<div class="section-title">Жалобы</div><div id="myReportsBox" style="max-height:200px;overflow-y:auto;-webkit-overflow-scrolling:touch">Загрузка...</div>';
         h +=
-          '<button class="btn" style="margin-top:15px;background:#e74c3c" onclick="logout()">Выйти</button>';
+          '<button class="btn" style="margin-top:15px;background:rgba(196,92,92,0.15);color:var(--red);border-color:rgba(196,92,92,0.35)" onclick="logout()">Выйти</button>';
         document.getElementById("profileContent").innerHTML = h;
         document.getElementById("profileModal").classList.add("active");
         fetch("/api/user/" + currentUser.id + "/badges", {
@@ -2548,10 +2543,10 @@
                     .map(function (b) {
                       var st =
                         b.status === "active"
-                          ? "✅"
+                          ? ""
                           : b.status === "pending"
                             ? "⏳"
-                            : "❌";
+                            : "";
                       return (
                         '<div class="search-result-item"><span>' +
                         st +
@@ -2638,10 +2633,10 @@
                 .map(function (rp) {
                   var st =
                     rp.status === "pending"
-                      ? "⏳ Ожидает"
+                      ? "Ожидает"
                       : rp.admin_response
-                        ? "✅ Отвечено"
-                        : "✅ Обработана";
+                        ? "Отвечено"
+                        : "Обработана";
                   var resp = rp.admin_response
                     ? '<div style="color:var(--green);margin-top:5px"><i class="fa-solid fa-reply"></i> ' +
                       escapeHtml(rp.admin_response) +
@@ -2702,7 +2697,7 @@
             '" class="avatar" style="width:60px;height:60px;display:block;margin:0 auto 10px;border:2px solid var(--card)" alt="avatar">'
           : "";
         o.innerHTML =
-          '<div class="overlay-box" style="position:relative"><div class="modal-header" style="padding:0;margin-bottom:15px"><h3 style="margin:0">Редактировать профиль</h3><button class="close-btn" style="position:absolute;top:0;right:0" onclick="closeOverlay(this)">✕</button></div>' +
+          '<div class="overlay-box" style="position:relative"><div class="modal-header" style="padding:0;margin-bottom:15px"><h3 style="margin:0">Редактировать профиль</h3><button class="close-btn" style="position:absolute;top:0;right:0" onclick="closeOverlay(this)"></button></div>' +
           avatarPreview +
           '<div class="form-group" style="text-align:center"><label style="display:block;margin-bottom:5px">Аватар (новый)</label><input type="file" id="editAvatarInput" accept="image/*" style="width:100%"></div>' +
           '<div class="form-group" style="text-align:left"><label>Никнейм</label><input type="text" id="editNickname" value="' +
@@ -2730,7 +2725,7 @@
           return;
         }
         if (containsBadWords(nick)) {
-          showOverlay("fa-xmark", "#e74c3c", "Ошибка", "Мат в никнейме!");
+          showToast("Некорректный текст");
           return;
         }
         var fd = new FormData();
@@ -2750,12 +2745,10 @@
               updateUser(nick, phone, email);
             })
             .catch(function () {
-              showOverlay(
-                "fa-xmark",
-                "#e74c3c",
-                "Ошибка",
-                "Не удалось загрузить аватар",
-              );
+                showOverlay(
+                  "Ошибка",
+                  "Не удалось загрузить аватар",
+                );
             });
         } else {
           updateUser(nick, phone, email);
@@ -2782,7 +2775,7 @@
                 currentUser.phone = p;
                 currentUser.email = e;
                 localStorage.setItem("tver_user", JSON.stringify(currentUser));
-                showToast("Сохранено!");
+                showToast("Сохранено");
                 // Refresh profile after short delay
                 setTimeout(function () {
                   if (document.getElementById("profileContent")) {
@@ -2790,11 +2783,11 @@
                   }
                 }, 300);
               } else {
-                showToast(d.error || "Ошибка сохранения");
+                showToast("Не удалось сохранить");
               }
             })
             .catch(function () {
-              showToast("Ошибка соединения с сервером");
+              showToast("Ошибка соединения");
             });
         }
       }
@@ -2912,7 +2905,7 @@
           panel.classList.remove("active");
         } else {
           if (!currentUser) {
-            showToast("Войдите");
+            showToast("Требуется вход");
             return;
           }
           // Position panel relative to bell button
@@ -2980,15 +2973,15 @@
             if (d.success) {
               var item = btn.closest(".review-item");
               if (item) item.remove();
-              showToast("Убрано из списка");
+              showToast("Убрано");
             } else {
-              showToast(d.error || "Ошибка");
+              showToast("Не удалось");
             }
           });
       }
       function reportReview(reviewId, benchId) {
         if (!currentUser) {
-          showToast("Войдите");
+          showToast("Требуется вход");
           return;
         }
         var o = document.createElement("div");
@@ -3021,7 +3014,7 @@
               });
               showToast("Жалоба отправлена");
             } else {
-              showToast(d.error || "Ошибка");
+              showToast("Не удалось");
             }
           });
       }

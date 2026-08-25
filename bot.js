@@ -22,7 +22,7 @@ bot.onText(/\/start/, (msg) => {
 
   bot.sendMessage(
     chatId,
-    "🪑 *Скамейки Твери*\n\n" + "Нажмите кнопку ниже, чтобы открыть карту!",
+    "*Скамейки Твери*\n\n" + "Нажмите кнопку ниже, чтобы открыть карту!",
     { parse_mode: "Markdown", ...keyboard },
   );
 });
@@ -35,10 +35,10 @@ bot.on("web_app_data", (msg) => {
     const parsed = JSON.parse(data);
 
     if (parsed.action === "bench_added" && parsed.bench_name) {
-      bot.sendMessage(chatId, `✅ Скамейка «${parsed.bench_name}» добавлена!`);
+      bot.sendMessage(chatId, ` Скамейка «${parsed.bench_name}» добавлена!`);
     }
   } catch (e) {
-    bot.sendMessage(chatId, "✅ Данные получены из Mini App");
+    bot.sendMessage(chatId, " Данные получены из Mini App");
   }
 });
 

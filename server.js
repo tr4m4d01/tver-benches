@@ -31,10 +31,10 @@ const CACHE_TTL = 30000; // stats / top-users cache TTL (ms)
 const SESSION_CACHE_TTL = 300000; // in-memory session cache (ms)
 
 if (!D1_ACCOUNT_ID || !D1_DATABASE_ID || !D1_API_TOKEN) {
-  console.error("❌ Missing required D1 environment variables:");
-  console.error("   D1_ACCOUNT_ID:", D1_ACCOUNT_ID ? "✓" : "✗");
-  console.error("   D1_DATABASE_ID:", D1_DATABASE_ID ? "✓" : "✗");
-  console.error("   D1_API_TOKEN:", D1_API_TOKEN ? "✓" : "✗");
+  console.error(" Missing required D1 environment variables:");
+  console.error("   D1_ACCOUNT_ID:", D1_ACCOUNT_ID ? "" : "");
+  console.error("   D1_DATABASE_ID:", D1_DATABASE_ID ? "" : "");
+  console.error("   D1_API_TOKEN:", D1_API_TOKEN ? "" : "");
   process.exit(1);
 }
 
@@ -1735,6 +1735,6 @@ initDatabase()
     app.listen(PORT, () => console.log("Сервер: http://localhost:" + PORT));
   })
   .catch((err) => {
-    console.error("❌ Ошибка инициализации БД:", err.message);
+    console.error(" Ошибка инициализации БД:", err.message);
     process.exit(1);
   });

@@ -9,7 +9,7 @@
     />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
-    <title>Админ-панель - писи попы</title>
+    <title>Админ-панель</title>
     <link
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
@@ -27,15 +27,21 @@
     </script>
     <style>
       :root {
-        --primary: #2d6da8;
-        --bg: #0a0e17;
-        --card: #0f1b2d;
-        --text: #fff;
-        --gray: #5a6b7d;
-        --border: #1e3a5f;
-        --green: #27ae60;
-        --red: #e74c3c;
-        --yellow: #f39c12;
+        --primary: #6c8b8c;
+        --primary-dark: #5a7677;
+        --bg: #0b0d0f;
+        --card: rgba(255, 255, 255, 0.06);
+        --card-border: rgba(255, 255, 255, 0.08);
+        --text: #e8e8e8;
+        --gray: #9ca3af;
+        --border: rgba(255, 255, 255, 0.08);
+        --input-bg: rgba(255, 255, 255, 0.05);
+        --soft: rgba(255, 255, 255, 0.03);
+        --green: #6c8b8c;
+        --red: #c45c5c;
+        --yellow: #c4a35a;
+        --shadow-card: 0 10px 30px rgba(0, 0, 0, 0.4);
+        --shadow-soft: 0 4px 15px rgba(0, 0, 0, 0.3);
       }
       * {
         margin: 0;
@@ -57,7 +63,7 @@
       }
       .login-card {
         background: var(--card);
-        border: 1px solid var(--border);
+        border: 1px solid var(--card-border);
         border-radius: 20px;
         padding: 30px;
         width: 100%;
@@ -78,21 +84,21 @@
       .form-group input {
         width: 100%;
         padding: 14px;
-        background: var(--bg);
+        background: var(--input-bg);
         border: 1px solid var(--border);
         border-radius: 10px;
-        color: #fff;
+        color: var(--text);
         font-size: 1em;
       }
       .btn {
         width: 100%;
         padding: 15px;
-        background: var(--primary);
-        color: #fff;
-        border: none;
+        background: rgba(108, 139, 140, 0.25);
+        color: var(--text);
+        border: 1px solid rgba(108, 139, 140, 0.45);
         border-radius: 10px;
-        font-size: 1em;
-        font-weight: 700;
+        font-size: 14px;
+        font-weight: 600;
         cursor: pointer;
       }
       #adminPanel {
@@ -127,9 +133,9 @@
         color: var(--gray);
       }
       .tab.active {
-        background: var(--primary);
-        color: #fff;
-        border-color: var(--primary);
+        background: rgba(108, 139, 140, 0.25);
+        color: var(--text);
+        border-color: rgba(108, 139, 140, 0.55);
       }
       .stats {
         display: grid;
@@ -188,24 +194,33 @@
       }
       .btn-sm {
         padding: 8px 15px;
-        border: none;
+        border: 1px solid var(--border);
         border-radius: 8px;
         cursor: pointer;
         font-weight: 600;
         font-size: 0.9em;
-        color: #fff;
+        color: var(--text);
+        background: rgba(255, 255, 255, 0.04);
       }
       .btn-approve {
-        background: var(--green);
+        background: rgba(108, 139, 140, 0.2);
+        border-color: rgba(108, 139, 140, 0.45);
+        color: var(--text);
       }
       .btn-reject {
-        background: var(--red);
+        background: rgba(196, 92, 92, 0.15);
+        border-color: rgba(196, 92, 92, 0.35);
+        color: var(--red);
       }
       .btn-hide {
-        background: var(--yellow);
+        background: rgba(196, 163, 90, 0.12);
+        border-color: rgba(196, 163, 90, 0.35);
+        color: var(--yellow);
       }
       .btn-view {
-        background: var(--primary);
+        background: rgba(108, 139, 140, 0.2);
+        border-color: rgba(108, 139, 140, 0.45);
+        color: var(--text);
       }
       .user-card {
         background: var(--card);
@@ -227,8 +242,8 @@
         margin-bottom: 10px;
       }
       .close-btn {
-        background: rgba(45, 109, 168, 0.3);
-        border: 1px solid rgba(45, 109, 168, 0.5);
+        background: rgba(108, 139, 140, 0.12);
+        border: 1px solid rgba(108, 139, 140, 0.3);
         color: var(--primary);
         width: 44px;
         height: 44px;
@@ -262,14 +277,17 @@
         position: absolute;
         top: 20px;
         right: 20px;
-        background: var(--primary);
-        border: none;
-        color: #fff;
+        background: rgba(108, 139, 140, 0.25);
+        border: 1px solid rgba(108, 139, 140, 0.45);
+        color: var(--text);
         font-size: 24px;
         width: 40px;
         height: 40px;
         border-radius: 50%;
         cursor: pointer;
+        display: flex;
+        align-items: center;
+        justify-content: center;
       }
       #adminMap {
         width: 100%;
@@ -283,12 +301,15 @@
         top: 20px;
         left: 50%;
         transform: translateX(-50%);
-        background: var(--primary);
-        color: #fff;
+        background: rgba(108, 139, 140, 0.25);
+        border: 1px solid rgba(108, 139, 140, 0.45);
+        color: var(--text);
         padding: 12px 20px;
         border-radius: 10px;
         z-index: 100000;
         font-weight: 600;
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
       }
     </style>
   </head>
@@ -543,9 +564,9 @@
             return (
               '<div class="bench-card"><h3><i class="fa-solid fa-chair"></i> Скамейка</h3><p>' +
               escapeHtml(b.description || "Нет описания") +
-              "</p><p>👤 " +
+              "</p><p> " +
               escapeHtml(b.user_name) +
-              "</p><p>❤️ " +
+              "</p><p> " +
               (b.likes || 0) +
               "</p>" +
               (b.admin_comment
@@ -556,19 +577,19 @@
               ph +
               '<div class="actions"><button class="btn-sm btn-view" onclick="viewBench(' +
               b.id +
-              ')">👁️ Посмотреть</button>' +
+              ')"> Посмотреть</button>' +
               (b.status !== "active"
                 ? '<button class="btn-sm btn-approve" onclick="updateStatus(' +
                   b.id +
-                  ",'active')\">✅ Одобрить</button>"
+                  ",'active')\"> Одобрить</button>"
                 : "") +
               '<button class="btn-sm btn-reject" onclick="rejectBench(' +
               b.id +
-              ')">❌ Отклонить</button><button class="btn-sm btn-hide" onclick="updateStatus(' +
+              ')"> Отклонить</button><button class="btn-sm btn-hide" onclick="updateStatus(' +
               b.id +
-              ',\'hidden\')">👁️ Скрыть</button><button class="btn-sm btn-reject" onclick="deleteBench(' +
+              ',\'hidden\')"> Скрыть</button><button class="btn-sm btn-reject" onclick="deleteBench(' +
               b.id +
-              ')">🗑️</button></div></div>'
+              ')"></button></div></div>'
             );
           })
           .join("");
@@ -616,11 +637,11 @@
               bench.latitude +
               "," +
               bench.longitude +
-              ')">🗺 Карта</button><button class="close-btn" onclick="document.getElementById(\'benchDetailModal\').remove()"><i class="fa-solid fa-xmark"></i></button></div></div><p>' +
+              ')"> Карта</button><button class="close-btn" onclick="document.getElementById(\'benchDetailModal\').remove()"><i class="fa-solid fa-xmark"></i></button></div></div><p>' +
               escapeHtml(bench.description || "") +
-              '</p><p style="color:var(--gray)">👤 ' +
+              '</p><p style="color:var(--gray)"> ' +
               escapeHtml(bench.user_name) +
-              "</p><p>❤️ " +
+              "</p><p> " +
               (bench.likes || 0) +
               "</p>" +
               (bench.admin_comment
@@ -636,10 +657,10 @@
               bench.published === 1
                 ? '<button class="btn-sm btn-edit" style="margin-top:15px" onclick="openAdminCommentModal(' +
                   bench.id +
-                  ')">💬 Комментарий админа</button>'
+                  ')"> Комментарий админа</button>'
                 : '<button class="btn-sm btn-edit" style="margin-top:15px" onclick="openAdminCommentModal(' +
                   bench.id +
-                  ')">💬 Комментарий админа</button>') +
+                  ')"> Комментарий админа</button>') +
               "</div>";
             document.body.appendChild(modal);
           });
@@ -671,7 +692,7 @@
               (bench.admin_comment ? escapeHtml(bench.admin_comment) : "") +
               '</textarea><div style="display:flex;gap:10px"><button class="btn" onclick="saveAdminComment(' +
               bench.id +
-              ')">💾 Сохранить</button><button class="btn-sm" onclick="document.getElementById(\'adminCommentModal\').remove()">✕ Отмена</button></div></div>';
+              ')"> Сохранить</button><button class="btn-sm" onclick="document.getElementById(\'adminCommentModal\').remove()"> Отмена</button></div></div>';
             document.body.appendChild(modal);
           });
       }
@@ -735,19 +756,19 @@
                     (u.nickname ? u.nickname.charAt(0).toUpperCase() : "?") +
                     "</div>";
                 var banBadge = u.banned
-                  ? '<span style="color:var(--red);font-size:0.8em">🚫 Забанен</span>'
+                  ? '<span style="color:var(--red);font-size:0.8em"> Забанен</span>'
                   : "";
                 var banBtn =
                   u.id !== adminUserId
                     ? u.banned
                       ? '<button class="btn-sm btn-approve" onclick="toggleBan(' +
                         u.id +
-                        ',0)">✅ Разбанить</button>'
+                        ',0)"> Разбанить</button>'
                       : '<button class="btn-sm btn-reject" onclick="openBanModal(' +
                         u.id +
                         ",'" +
                         escapeHtml(u.nickname || "") +
-                        "')\">🚫 Забанить</button>"
+                        "')\"> Забанить</button>"
                     : "";
                 return (
                   '<div class="user-card"><div style="display:flex;align-items:center;gap:8px"><div>' +
@@ -776,7 +797,7 @@
                   u.id +
                   ",'" +
                   escapeHtml(u.nickname || "") +
-                  "')\">✉️ Сообщение</button>" +
+                  "')\"> Сообщение</button>" +
                   "</div></div>"
                 );
               })
@@ -834,7 +855,7 @@
           '<textarea id="banReason" rows="3" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;color:var(--text)" placeholder="Введите причину бана..."></textarea>' +
           '<div style="display:flex;gap:10px;margin-top:15px"><button class="btn-sm btn-reject" onclick="submitBan(' +
           uid +
-          ')">🚫 Забанить</button><button class="btn-sm" style="background:rgba(255,255,255,0.1)" onclick="closeOverlay(this)">✕ Отмена</button></div></div>';
+          ')"> Забанить</button><button class="btn-sm" style="background:rgba(255,255,255,0.1)" onclick="closeOverlay(this)"> Отмена</button></div></div>';
         o.addEventListener("click", function (e) {
           if (e.target === o) o.remove();
         });
@@ -879,7 +900,7 @@
           '<textarea id="adminMessage" rows="3" style="width:100%;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:10px;color:var(--text)" placeholder="Введите сообщение..."></textarea>' +
           '<div style="display:flex;gap:10px;margin-top:15px"><button class="btn-sm btn-view" onclick="submitMessage(' +
           uid +
-          ')">✉️ Отправить</button><button class="btn-sm" style="background:rgba(255,255,255,0.1)" onclick="closeOverlay(this)">✕ Отмена</button></div></div>';
+          ')"> Отправить</button><button class="btn-sm" style="background:rgba(255,255,255,0.1)" onclick="closeOverlay(this)"> Отмена</button></div></div>';
         o.addEventListener("click", function (e) {
           if (e.target === o) o.remove();
         });
@@ -948,19 +969,19 @@
                   escapeHtml(rp.bench_name) +
                   '</b><span style="color:var(--red);font-size:.85em">' +
                   escapeHtml(rp.reason) +
-                  '</span></div><p style="color:var(--gray)">👤 ' +
+                  '</span></div><p style="color:var(--gray)"> ' +
                   escapeHtml(rp.nickname || "Аноним") +
                   "</p>" +
                   ph +
                   '<div class="actions"><button class="btn-sm btn-view" onclick="respondReport(' +
                   rp.id +
-                  ')">💬 Ответить</button><button class="btn-sm btn-approve" onclick="resolveReport(' +
+                  ')"> Ответить</button><button class="btn-sm btn-approve" onclick="resolveReport(' +
                   rp.id +
-                  ',\'delete\')">🗑️ Удалить</button><button class="btn-sm btn-hide" onclick="resolveReport(' +
+                  ',\'delete\')"> Удалить</button><button class="btn-sm btn-hide" onclick="resolveReport(' +
                   rp.id +
-                  ',\'hide\')">👁️ Скрыть</button><button class="btn-sm btn-approve" onclick="resolveReport(' +
+                  ',\'hide\')"> Скрыть</button><button class="btn-sm btn-approve" onclick="resolveReport(' +
                   rp.id +
-                  ",'dismiss')\">✅ Отклонить жалобу</button></div></div>"
+                  ",'dismiss')\"> Отклонить жалобу</button></div></div>"
                 );
               })
               .join("");
@@ -990,8 +1011,8 @@
                 "none";
             }
             box.innerHTML =
-              '<button class="btn-sm" style="margin-bottom:10px;background:var(--red)" onclick="clearAdminNotifications()">🧹 Очистить прочитанные</button>' +
-              '<button class="btn-sm" style="margin-left:10px;margin-bottom:10px;background:var(--green)" onclick="markAllNotificationsRead()">✓ Прочитать всё</button>' +
+              '<button class="btn-sm" style="margin-bottom:10px;background:var(--red)" onclick="clearAdminNotifications()"> Очистить прочитанные</button>' +
+              '<button class="btn-sm" style="margin-left:10px;margin-bottom:10px;background:var(--green)" onclick="markAllNotificationsRead()"> Прочитать всё</button>' +
               d.notifications
                 .map(function (n) {
                   var related = n.related_id
@@ -1092,7 +1113,7 @@
                   escapeHtml(rev.bench_name || "Скамейка #" + rev.bench_id) +
                   '</b><span style="color:var(--yellow)">' +
                   stars +
-                  '</span></div><p style="color:var(--gray)">👤 ' +
+                  '</span></div><p style="color:var(--gray)"> ' +
                   escapeHtml(rev.nickname || "Аноним") +
                   "</p><p>" +
                   escapeHtml(rev.comment || "") +
@@ -1100,7 +1121,7 @@
                   ph +
                   '<div class="actions"><button class="btn-sm btn-reject" onclick="deleteReview(' +
                   rev.id +
-                  ')">🗑️ Удалить</button></div></div>'
+                  ')"> Удалить</button></div></div>'
                 );
               })
               .join("");
@@ -1230,7 +1251,7 @@
         });
       }
       function respondReport(reportId) {
-        var response = prompt("Ответ пользователю:", "Спасибо за жалобу!");
+        var response = prompt("Ответ пользователю:", "Ответ отправлен");
         if (!response) return;
         fetch("/api/admin/reports/" + reportId + "/respond", {
           method: "POST",
