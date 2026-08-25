@@ -942,6 +942,10 @@
           <button id="telegramLoginBtn" class="btn">Войти через Telegram</button>
           <div id="authMessage" class="toast" style="margin-top:15px;display:none;"></div>
         </div>
+        <div id="devAuthBlock" style="display:none;">
+          <button id="devLoginBtn" class="btn" style="background:#4a5568;">Dev вход (localhost)</button>
+          <div id="devAuthMessage" class="toast" style="margin-top:15px;display:none;"></div>
+        </div>
       </div>
     </div>
 
@@ -1401,6 +1405,33 @@
               }, 500);
             } else {
               showToast(d.error || "❌ Ошибка входа");
+            }
+          });
+      }
+      // ---- Dev АВТОРИЗАЦИЯ ------------------------------------------------
+      // devLogin(): обходит Telegram-проверку и создаёт dev-сессию через
+      // /api/dev-login. Доступно только на localhost или при ?dev=true.
+      function devLogin() {
+        fetch("/api/dev-login", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        })
+          .then(function (r) {
+            return r.json();
+          })
+          .then(function (d) {
+            if (d.success) {
+              currentUser = d.user;
+              currentUser.token = d.token;
+              localStorage.setItem("tver_user", JSON.stringify(currentUser));
+              document.getElementById("authScreen").classList.add("hidden");
+              document.getElementById("mainApp").classList.add("active");
+              refreshMap();
+              setTimeout(function () {
+                updateNotifBadge();
+              }, 500);
+            } else {
+              showToast(d.error || "❌ Ошибка dev входа");
             }
           });
       }
@@ -2999,6 +3030,18 @@
         var tgBtn = document.getElementById("telegramLoginBtn");
         if (tgBtn) {
           tgBtn.addEventListener("click", telegramLogin);
+        }
+        var isLocalhost =
+          window.location.hostname === "localhost" ||
+          window.location.hostname === "127.0.0.1";
+        var isDevParam = new URLSearchParams(window.location.search).has("dev");
+        if (isLocalhost || isDevParam) {
+          var devBlock = document.getElementById("devAuthBlock");
+          if (devBlock) devBlock.style.display = "block";
+          var devBtn = document.getElementById("devLoginBtn");
+          if (devBtn) {
+            devBtn.addEventListener("click", devLogin);
+          }
         }
       // Инициализируем swipe-to-close для карточки скамейки
       setTimeout(function () {

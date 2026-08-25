@@ -454,6 +454,58 @@ app.post("/api/telegram-login", async (req, res) => {
   }
 });
 
+const isDev = process.env.NODE_ENV !== "production" || process.env.DEV_MODE === "true";
+
+if (isDev) {
+  app.post("/api/dev-login", async (req, res) => {
+    try {
+      const telegramId = "dev";
+      let users = await q("SELECT * FROM users WHERE telegram_id=?", [telegramId]);
+
+      if (!users.length) {
+        await run(
+          "INSERT INTO users(telegram_id, login, nickname) VALUES (?,?,?)",
+          [telegramId, "dev", "Dev User"],
+        );
+
+        const newUsers = await q("SELECT * FROM users WHERE telegram_id=?", [
+          telegramId,
+        ]);
+        const user = newUsers[0];
+        const token = crypto.randomBytes(32).toString("hex");
+        const expiresAt = Date.now() + SESSION_DURATION;
+        await run(
+          "INSERT INTO sessions(user_id,token,expires_at) VALUES (?,?,?)",
+          [user.id, token, expiresAt],
+        );
+
+        return res.json({
+          success: true,
+          user: { id: user.id, nickname: user.nickname, is_admin: user.is_admin },
+          token,
+        });
+      } else {
+        const user = users[0];
+        const token = crypto.randomBytes(32).toString("hex");
+        const expiresAt = Date.now() + SESSION_DURATION;
+        await run(
+          "INSERT INTO sessions(user_id,token,expires_at) VALUES (?,?,?)",
+          [user.id, token, expiresAt],
+        );
+
+        return res.json({
+          success: true,
+          user: { id: user.id, nickname: user.nickname, is_admin: user.is_admin },
+          token,
+        });
+      }
+    } catch (err) {
+      console.error("Ошибка dev входа:", err.message);
+      res.json({ success: false, error: "Ошибка сервера" });
+    }
+  });
+}
+
 // ============================================================================
 //  Express middleware
 // ============================================================================

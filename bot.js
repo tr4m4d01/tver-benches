@@ -1,7 +1,7 @@
 const TelegramBot = require("node-telegram-bot-api");
 
-const TOKEN = "8618742398:AAGWL2fS8kBYcSC4fHtpeo68sm1u320T7Gg";
-const MINI_APP_URL = "https://tver-benches.onrender.com/";
+const TOKEN = process.env.TELEGRAM_BOT_TOKEN || "8618742398:AAGWL2fS8kBYcSC4fHtpeo68sm1u320T7Gg";
+const MINI_APP_URL = process.env.MINI_APP_URL || "https://tver-benches.onrender.com/";
 
 const bot = new TelegramBot(TOKEN, { polling: true });
 
