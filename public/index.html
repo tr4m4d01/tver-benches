@@ -1126,6 +1126,15 @@
         profileInterval = null,
         dragPlacemark = null,
         isDraggingMarker = false;
+      }
+      alert(
+        "DEBUG Telegram: window.Telegram=" +
+          !!window.Telegram +
+          ", WebApp=" +
+          !!(window.Telegram && window.Telegram.WebApp) +
+          ", initData=" +
+          !!(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData),
+      );
       if (window.Telegram && window.Telegram.WebApp) {
         var tg = window.Telegram.WebApp;
         tg.ready();
