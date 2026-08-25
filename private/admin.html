@@ -293,8 +293,13 @@
     <div id="loginScreen">
       <div class="login-card">
         <h2><i class="fa-solid fa-lock"></i> Админ-панель</h2>
-        <button class="btn" onclick="telegramLogin()">Войти через Telegram</button>
-        <div id="authMessage" style="margin-top:15px;text-align:center;color:#ccc;"></div>
+        <div class="form-group">
+          <label>Логин</label><input type="text" id="adminLogin" />
+        </div>
+        <div class="form-group">
+          <label>Пароль</label><input type="password" id="adminPassword" />
+        </div>
+        <button class="btn" onclick="login()">Войти</button>
       </div>
     </div>
     <div id="adminPanel">
@@ -375,26 +380,18 @@
           toast.remove();
         }, 3000);
       }
-      async function telegramLogin() {
-        if (!window.Telegram || !window.Telegram.WebApp) {
-          document.getElementById("authMessage").textContent = "⚠️ Это приложение работает только в Telegram";
-          return;
-        }
-        var tg = window.Telegram.WebApp;
-        var initData = tg.initData;
-        if (!initData) {
-          document.getElementById("authMessage").textContent = "⚠️ Данные Telegram не доступны";
-          return;
-        }
+      async function login() {
+        var l = document.getElementById("adminLogin").value.trim();
+        var p = document.getElementById("adminPassword").value;
         try {
-          var res = await fetch("/api/telegram-login", {
+          var res = await fetch("/api/login", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ initData: initData }),
+            body: JSON.stringify({ login: l, password: p }),
           });
           var data = await res.json();
           if (!data.success) {
-            document.getElementById("authMessage").textContent = "❌ " + (data.error || "Ошибка входа");
+            alert("Неверные данные");
             return;
           }
           adminToken = data.token;
@@ -411,10 +408,13 @@
             initAdminMap();
             loadAll();
           } else {
-            document.getElementById("authMessage").textContent = "❌ Нет доступа к админке";
+            alert(
+              "Нет доступа к админке: " +
+                (adminData.error || "недостаточно прав"),
+            );
           }
         } catch (e) {
-          document.getElementById("authMessage").textContent = "❌ Ошибка соединения";
+          alert("Ошибка соединения");
         }
       }
       function logout() {

@@ -1,10 +1,31 @@
-// Инициализация Telegram
-const tg = window.Telegram.WebApp;
-tg.ready();
-tg.expand();
+// Инициализация Telegram (если открыто внутри Telegram)
+const tg = window.Telegram && window.Telegram.WebApp;
+if (tg) {
+  tg.ready();
+  tg.expand();
+}
 
-// Сессионный токен
-let authToken = localStorage.getItem('tg_token');
+// Читаем сессию из localStorage (та же запись, что и в index.html)
+let authToken = null;
+let currentUser = null;
+try {
+  const stored = localStorage.getItem('tver_user');
+  if (stored) {
+    currentUser = JSON.parse(stored);
+    authToken = currentUser.token || null;
+  }
+} catch (e) {
+  authToken = null;
+  currentUser = null;
+}
+
+function authHeaders() {
+  const headers = {};
+  if (authToken) {
+    headers['Authorization'] = 'Bearer ' + authToken;
+  }
+  return headers;
+}
 
 // Инициализация карты
 const map = L.map('map', {
@@ -122,56 +143,10 @@ function openAddModal() {
     getLocation();
 }
 
-// Telegram авторизация
-async function ensureAuth() {
-    if (authToken) return;
-
-    if (!window.Telegram || !window.Telegram.WebApp) {
-        showToast('⚠️ Это приложение работает только в Telegram');
-        return;
-    }
-
-    const tg = window.Telegram.WebApp;
-    const initData = tg.initData;
-
-    if (!initData) {
-        showToast('⚠️ Данные Telegram не доступны');
-        return;
-    }
-
-    try {
-        const response = await fetch('/api/telegram-login', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ initData })
-        });
-
-        const data = await response.json();
-
-        if (data.success) {
-            authToken = data.token;
-            localStorage.setItem('tg_token', authToken);
-        } else {
-            showToast(data.error || '❌ Ошибка авторизации');
-        }
-    } catch (error) {
-        showToast('❌ Ошибка соединения');
-    }
-}
-
-function authHeaders() {
-    const headers = {};
-    if (authToken) {
-        headers['Authorization'] = 'Bearer ' + authToken;
-    }
-    return headers;
-}
-
 // Сохранение скамейки
 async function saveBench() {
-    await ensureAuth();
     if (!authToken) {
-        showToast('⚠️ Требуется авторизация');
+        showToast('⚠️ Требуется авторизация. Войдите через главную страницу.');
         return;
     }
 
@@ -212,10 +187,12 @@ async function saveBench() {
             document.getElementById('benchDescription').value = '';
             document.getElementById('photoInput').value = '';
             
-            tg.sendData(JSON.stringify({
-                action: 'bench_added',
-                bench_name: name
-            }));
+            if (tg) {
+              tg.sendData(JSON.stringify({
+                  action: 'bench_added',
+                  bench_name: name
+              }));
+            }
             
             loadBenches();
             showToast('✅ Скамейка добавлена!');
@@ -254,9 +231,11 @@ function showToast(message) {
 }
 
 // Кнопка назад
-tg.BackButton.onClick(() => {
+if (tg) {
+  tg.BackButton.onClick(() => {
     document.getElementById('addModal').classList.remove('active');
-});
+  });
+}
 
 // Загрузка при старте
 loadBenches();

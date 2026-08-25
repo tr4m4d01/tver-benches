@@ -938,13 +938,33 @@
         <div class="auth-subtitle">
           Находите лучшие скамейки Твери рядом с вами
         </div>
-        <div id="telegramAuthBlock">
-          <button id="telegramLoginBtn" class="btn">Войти через Telegram</button>
-          <div id="authMessage" class="toast" style="margin-top:15px;display:none;"></div>
+        <div class="auth-tabs">
+          <div class="auth-tab active" onclick="showLogin()">Вход</div>
+          <div class="auth-tab" onclick="showRegister()">Регистрация</div>
         </div>
-        <div id="devAuthBlock" style="display:none;">
-          <button id="devLoginBtn" class="btn" style="background:#4a5568;">Dev вход (localhost)</button>
-          <div id="devAuthMessage" class="toast" style="margin-top:15px;display:none;"></div>
+        <div id="loginBox">
+          <div class="form-group">
+            <label>Логин</label><input type="text" id="loginLogin" />
+          </div>
+          <div class="form-group">
+            <label>Пароль</label><input type="password" id="loginPassword" />
+          </div>
+          <button class="btn" onclick="doLogin()">Войти</button>
+        </div>
+        <div id="registerBox" style="display: none">
+          <div class="form-group">
+            <label>Логин (англ.)</label><input type="text" id="regLogin" />
+          </div>
+          <div class="form-group">
+            <label>Никнейм</label><input type="text" id="regNickname" />
+          </div>
+          <div class="form-group">
+            <label>Пароль</label><input type="password" id="regPassword" />
+          </div>
+          <div class="form-group">
+            <label>Повторите пароль</label><input type="password" id="regPassword2" />
+          </div>
+          <button class="btn" onclick="doRegister()">Зарегистрироваться</button>
         </div>
       </div>
     </div>
@@ -1127,14 +1147,6 @@
         dragPlacemark = null,
         isDraggingMarker = false;
       }
-      alert(
-        "DEBUG Telegram: window.Telegram=" +
-          !!window.Telegram +
-          ", WebApp=" +
-          !!(window.Telegram && window.Telegram.WebApp) +
-          ", initData=" +
-          !!(window.Telegram && window.Telegram.WebApp && window.Telegram.WebApp.initData),
-      );
       if (window.Telegram && window.Telegram.WebApp) {
         var tg = window.Telegram.WebApp;
         tg.ready();
@@ -1379,55 +1391,62 @@
         // Закрывает всплывающее окно .overlay-modal по клику на крестик внутри
         el.closest(".overlay-modal").remove();
       }
-      // ---- Telegram АВТОРИЗАЦИЯ -------------------------------------------
-      // telegramLogin(): отправляет initData на /api/telegram-login, создаёт
-      // сессию и открывает основное приложение.
-      function telegramLogin() {
-        var hasTelegram = !!window.Telegram;
-        var hasWebApp = !!(window.Telegram && window.Telegram.WebApp);
-        alert("DEBUG: window.Telegram=" + hasTelegram + ", window.Telegram.WebApp=" + hasWebApp);
-        if (!window.Telegram || !window.Telegram.WebApp) {
-          showToast("⚠️ Это приложение работает только в Telegram");
+      // ---- ПЕРЕКЛЮЧЕНИЕ ФОРМ ВХОДА/РЕГИСТРАЦИИ ---------------------------
+      function showLogin() {
+        document.querySelectorAll(".auth-tab")[0].classList.add("active");
+        document.querySelectorAll(".auth-tab")[1].classList.remove("active");
+        document.getElementById("loginBox").style.display = "block";
+        document.getElementById("registerBox").style.display = "none";
+      }
+      function showRegister() {
+        document.querySelectorAll(".auth-tab")[1].classList.add("active");
+        document.querySelectorAll(".auth-tab")[0].classList.remove("active");
+        document.getElementById("registerBox").style.display = "block";
+        document.getElementById("loginBox").style.display = "none";
+      }
+      // ---- РЕГИСТРАЦИЯ ----------------------------------------------------
+      function doRegister() {
+        var l = document.getElementById("regLogin").value.trim(),
+          n = document.getElementById("regNickname").value.trim(),
+          p = document.getElementById("regPassword").value,
+          p2 = document.getElementById("regPassword2").value;
+        if (!l || !n || !p || !p2) {
+          showToast("Заполните все поля");
           return;
         }
-        var tg = window.Telegram.WebApp;
-        var initData = tg.initData;
-        alert("DEBUG initData: " + (initData || "пусто"));
-        if (!initData) {
-          showToast("⚠️ Данные Telegram не доступны");
+        if (p !== p2) {
+          showToast("Пароли не совпадают");
           return;
         }
-        fetch("/api/telegram-login", {
+        fetch("/api/register", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ initData: initData }),
+          body: JSON.stringify({ login: l, password: p, nickname: n }),
         })
           .then(function (r) {
             return r.json();
           })
           .then(function (d) {
             if (d.success) {
-              currentUser = d.user;
-              currentUser.token = d.token;
-              localStorage.setItem("tver_user", JSON.stringify(currentUser));
-              document.getElementById("authScreen").classList.add("hidden");
-              document.getElementById("mainApp").classList.add("active");
-              refreshMap();
-              setTimeout(function () {
-                updateNotifBadge();
-              }, 500);
+              showToast("Регистрация успешна! Теперь войдите.");
+              showLogin();
             } else {
-              showToast(d.error || "❌ Ошибка входа");
+              showToast(d.error || "Ошибка регистрации");
             }
           });
       }
-      // ---- Dev АВТОРИЗАЦИЯ ------------------------------------------------
-      // devLogin(): обходит Telegram-проверку и создаёт dev-сессию через
-      // /api/dev-login. Доступно только на localhost или при ?dev=true.
-      function devLogin() {
-        fetch("/api/dev-login", {
+      // ---- ВХОД ------------------------------------------------------------
+      function doLogin() {
+        var l = document.getElementById("loginLogin").value.trim(),
+          p = document.getElementById("loginPassword").value;
+        if (!l || !p) {
+          showToast("Введите данные");
+          return;
+        }
+        fetch("/api/login", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ login: l, password: p }),
         })
           .then(function (r) {
             return r.json();
@@ -1444,7 +1463,7 @@
                 updateNotifBadge();
               }, 500);
             } else {
-              showToast(d.error || "❌ Ошибка dev входа");
+              showToast(d.error || "Ошибка входа");
             }
           });
       }
@@ -3040,26 +3059,6 @@
          }
        });
         checkAuth();
-        var tgBtn = document.getElementById("telegramLoginBtn");
-        if (tgBtn) {
-          tgBtn.addEventListener("click", telegramLogin);
-        }
-        var isLocalhost =
-          window.location.hostname === "localhost" ||
-          window.location.hostname === "127.0.0.1";
-        var isDevParam = new URLSearchParams(window.location.search).has("dev");
-        var isDevEnv =
-          isLocalhost ||
-          isDevParam ||
-          document.querySelector('meta[name="x-dev-env"]') !== null;
-        if (isDevEnv) {
-          var devBlock = document.getElementById("devAuthBlock");
-          if (devBlock) devBlock.style.display = "block";
-          var devBtn = document.getElementById("devLoginBtn");
-          if (devBtn) {
-            devBtn.addEventListener("click", devLogin);
-          }
-        }
       // Инициализируем swipe-to-close для карточки скамейки
       setTimeout(function () {
         initBenchCardSwipe();
