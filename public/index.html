@@ -1374,6 +1374,9 @@
       // telegramLogin(): отправляет initData на /api/telegram-login, создаёт
       // сессию и открывает основное приложение.
       function telegramLogin() {
+        var hasTelegram = !!window.Telegram;
+        var hasWebApp = !!(window.Telegram && window.Telegram.WebApp);
+        alert("DEBUG: window.Telegram=" + hasTelegram + ", window.Telegram.WebApp=" + hasWebApp);
         if (!window.Telegram || !window.Telegram.WebApp) {
           showToast("⚠️ Это приложение работает только в Telegram");
           return;
