@@ -3,7 +3,10 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta
+      http-equiv="Cache-Control"
+      content="no-cache, no-store, must-revalidate"
+    />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>Админ-панель - писи попы</title>
@@ -459,11 +462,12 @@
       }
       function loadStats() {
         Promise.all([
-          fetch("/api/admin/benches", { headers: adminHeaders(), cache: "no-store" }).then(
-            function (r) {
-              return r.json();
-            },
-          ),
+          fetch("/api/admin/benches", {
+            headers: adminHeaders(),
+            cache: "no-store",
+          }).then(function (r) {
+            return r.json();
+          }),
           fetch("/api/admin/users", { headers: adminHeaders() }).then(
             function (r) {
               return r.json();
@@ -497,15 +501,16 @@
         });
       }
       function loadBenches() {
-        fetch("/api/admin/benches", { headers: adminHeaders(), cache: "no-store" })
+        fetch("/api/admin/benches", {
+          headers: adminHeaders(),
+          cache: "no-store",
+        })
           .then(function (r) {
             return r.json();
           })
           .then(function (d) {
             var pending = d.benches.filter(function (b) {
-              return (
-                b.status === "pending" || b.status === "rejected"
-              );
+              return b.status === "pending" || b.status === "rejected";
             });
             var approved = d.benches.filter(function (b) {
               return b.status === "active";
@@ -571,7 +576,10 @@
       function viewBench(id) {
         var existing = document.getElementById("benchDetailModal");
         if (existing) existing.remove();
-        fetch("/api/admin/benches", { headers: adminHeaders(), cache: "no-store" })
+        fetch("/api/admin/benches", {
+          headers: adminHeaders(),
+          cache: "no-store",
+        })
           .then(function (r) {
             return r.json();
           })
@@ -609,24 +617,30 @@
               "," +
               bench.longitude +
               ')">🗺 Карта</button><button class="close-btn" onclick="document.getElementById(\'benchDetailModal\').remove()"><i class="fa-solid fa-xmark"></i></button></div></div><p>' +
-               escapeHtml(bench.description || "") +
-               '</p><p style="color:var(--gray)">👤 ' +
-               escapeHtml(bench.user_name) +
-               "</p><p>❤️ " +
-               (bench.likes || 0) +
-               "</p>" +
-               (bench.admin_comment
-                  ? '<p style="color:var(--yellow);background:#fff3cd;border:1px solid var(--yellow);border-radius:8px;padding:8px;font-size:12px"><i class="fa-solid fa-comment-dots"></i> ' +
-                    escapeHtml(bench.admin_comment) +
-                    "</p>"
-                  : "") +
-               '<div style="display:flex;flex-wrap:wrap;gap:10px">' +
-                ph +
-                "</div>" +
-                (bench.moderated === 1 || bench.status === "approved" || bench.published === 1
-                  ? '<button class="btn-sm btn-edit" style="margin-top:15px" onclick="openAdminCommentModal(' + bench.id + ')">💬 Комментарий админа</button>'
-                  : '<button class="btn-sm btn-edit" style="margin-top:15px" onclick="openAdminCommentModal(' + bench.id + ')">💬 Комментарий админа</button>') +
-                "</div>";
+              escapeHtml(bench.description || "") +
+              '</p><p style="color:var(--gray)">👤 ' +
+              escapeHtml(bench.user_name) +
+              "</p><p>❤️ " +
+              (bench.likes || 0) +
+              "</p>" +
+              (bench.admin_comment
+                ? '<p style="color:var(--yellow);background:#fff3cd;border:1px solid var(--yellow);border-radius:8px;padding:8px;font-size:12px"><i class="fa-solid fa-comment-dots"></i> ' +
+                  escapeHtml(bench.admin_comment) +
+                  "</p>"
+                : "") +
+              '<div style="display:flex;flex-wrap:wrap;gap:10px">' +
+              ph +
+              "</div>" +
+              (bench.moderated === 1 ||
+              bench.status === "approved" ||
+              bench.published === 1
+                ? '<button class="btn-sm btn-edit" style="margin-top:15px" onclick="openAdminCommentModal(' +
+                  bench.id +
+                  ')">💬 Комментарий админа</button>'
+                : '<button class="btn-sm btn-edit" style="margin-top:15px" onclick="openAdminCommentModal(' +
+                  bench.id +
+                  ')">💬 Комментарий админа</button>') +
+              "</div>";
             document.body.appendChild(modal);
           });
       }
@@ -635,9 +649,13 @@
         if (existing) existing.remove();
         var fetchUrl = "/api/admin/benches";
         fetch(fetchUrl, { headers: adminHeaders() })
-          .then(function (r) { return r.json(); })
+          .then(function (r) {
+            return r.json();
+          })
           .then(function (d) {
-            var bench = d.benches.find(function (b) { return b.id === benchId; });
+            var bench = d.benches.find(function (b) {
+              return b.id === benchId;
+            });
             if (!bench) return;
             var modal = document.createElement("div");
             modal.id = "adminCommentModal";
@@ -647,9 +665,13 @@
               if (e.target === modal) modal.remove();
             };
             modal.innerHTML =
-              '<div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:25px;max-width:500px;width:100%"><h2>Комментарий админа к скамейке #' + bench.id + '</h2><textarea id="adminCommentInput" style="width:100%;height:100px;background:var(--dark);border:1px solid var(--border);border-radius:10px;padding:10px;color:var(--text);margin-bottom:15px" placeholder="Введите комментарий...">' +
+              '<div style="background:var(--card);border:1px solid var(--border);border-radius:20px;padding:25px;max-width:500px;width:100%"><h2>Комментарий админа к скамейке #' +
+              bench.id +
+              '</h2><textarea id="adminCommentInput" style="width:100%;height:100px;background:var(--dark);border:1px solid var(--border);border-radius:10px;padding:10px;color:var(--text);margin-bottom:15px" placeholder="Введите комментарий...">' +
               (bench.admin_comment ? escapeHtml(bench.admin_comment) : "") +
-              '</textarea><div style="display:flex;gap:10px"><button class="btn" onclick="saveAdminComment(' + bench.id + ')">💾 Сохранить</button><button class="btn-sm" onclick="document.getElementById(\'adminCommentModal\').remove()">✕ Отмена</button></div></div>';
+              '</textarea><div style="display:flex;gap:10px"><button class="btn" onclick="saveAdminComment(' +
+              bench.id +
+              ')">💾 Сохранить</button><button class="btn-sm" onclick="document.getElementById(\'adminCommentModal\').remove()">✕ Отмена</button></div></div>';
             document.body.appendChild(modal);
           });
       }
@@ -657,10 +679,14 @@
         var comment = document.getElementById("adminCommentInput").value.trim();
         fetch("/api/admin/benches/" + benchId + "/comment", {
           method: "POST",
-          headers: Object.assign(adminHeaders(), { "Content-Type": "application/json" }),
+          headers: Object.assign(adminHeaders(), {
+            "Content-Type": "application/json",
+          }),
           body: JSON.stringify({ comment: comment }),
         })
-          .then(function (r) { return r.json(); })
+          .then(function (r) {
+            return r.json();
+          })
           .then(function (d) {
             if (d.success) {
               document.getElementById("adminCommentModal").remove();
@@ -681,7 +707,10 @@
         }
       }
       function loadUsers() {
-        fetch("/api/admin/users", { headers: adminHeaders(), cache: "no-store" })
+        fetch("/api/admin/users", {
+          headers: adminHeaders(),
+          cache: "no-store",
+        })
           .then(function (r) {
             return r.json();
           })
@@ -696,49 +725,60 @@
                 var adminBadge = u.is_admin
                   ? '<span style="color:var(--yellow);font-size:0.8em">Админ</span>'
                   : '<span style="color:var(--gray);font-size:0.8em">Пользователь</span>';
-                 var avatarHtml = u.avatar
-                   ? '<img src="' +
-                     (u.avatar.indexOf("/") === 0
-                       ? window.location.origin + u.avatar
-                       : u.avatar) +
-                     '" style="width:36px;height:36px;border-radius:50%;object-fit:cover;margin-right:8px">'
-                   : '<div style="width:36px;height:36px;border-radius:50%;background:var(--primary);display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:0.9em;margin-right:8px">' +
-                     (u.nickname ? u.nickname.charAt(0).toUpperCase() : "?") +
-                     "</div>";
-                 var banBadge = u.banned
-                   ? '<span style="color:var(--red);font-size:0.8em">🚫 Забанен</span>'
-                   : "";
-                 var banBtn = u.id !== adminUserId
-                   ? (u.banned
-                       ? '<button class="btn-sm btn-approve" onclick="toggleBan(' + u.id + ',0)">✅ Разбанить</button>'
-                       : '<button class="btn-sm btn-reject" onclick="openBanModal(' + u.id + ',\'' + escapeHtml(u.nickname || "") + '\')">🚫 Забанить</button>')
-                   : "";
-                 return (
-                   '<div class="user-card"><div style="display:flex;align-items:center;gap:8px"><div>' +
-                   avatarHtml +
-                   '<b>' +
-                   escapeHtml(u.nickname) +
-                   '</b></div><small style="color:var(--gray)">@' +
-                   escapeHtml(u.login) +
-                   "</small>" +
-                   adminBadge +
-                   banBadge +
-                   '</div><div style="text-align:center"><div style="font-weight:700;color:var(--primary)">' +
-                   u.reputation +
-                   '</div><small style="color:var(--gray)">репутация</small></div><div style="text-align:center"><div style="font-weight:700">' +
-                   u.total_benches +
-                   '</div><small style="color:var(--gray)">скамеек</small></div><div style="display:flex;gap:5px">' +
-                   (u.is_admin
-                     ? '<button class="btn-sm btn-hide" onclick="toggleAdmin(' +
-                       u.id +
-                       ',0)">Убрать админа</button>'
-                     : '<button class="btn-sm btn-approve" onclick="toggleAdmin(' +
-                       u.id +
-                       ',1)">Сделать админом</button>') +
-                   banBtn +
-                   '<button class="btn-sm btn-view" onclick="openMessageModal(' + u.id + ',\'' + escapeHtml(u.nickname || "") + '\')">✉️ Сообщение</button>' +
-                   "</div></div>"
-                 );
+                var avatarHtml = u.avatar
+                  ? '<img src="' +
+                    (u.avatar.indexOf("/") === 0
+                      ? window.location.origin + u.avatar
+                      : u.avatar) +
+                    '" style="width:36px;height:36px;border-radius:50%;object-fit:cover;margin-right:8px">'
+                  : '<div style="width:36px;height:36px;border-radius:50%;background:var(--primary);display:inline-flex;align-items:center;justify-content:center;color:#fff;font-size:0.9em;margin-right:8px">' +
+                    (u.nickname ? u.nickname.charAt(0).toUpperCase() : "?") +
+                    "</div>";
+                var banBadge = u.banned
+                  ? '<span style="color:var(--red);font-size:0.8em">🚫 Забанен</span>'
+                  : "";
+                var banBtn =
+                  u.id !== adminUserId
+                    ? u.banned
+                      ? '<button class="btn-sm btn-approve" onclick="toggleBan(' +
+                        u.id +
+                        ',0)">✅ Разбанить</button>'
+                      : '<button class="btn-sm btn-reject" onclick="openBanModal(' +
+                        u.id +
+                        ",'" +
+                        escapeHtml(u.nickname || "") +
+                        "')\">🚫 Забанить</button>"
+                    : "";
+                return (
+                  '<div class="user-card"><div style="display:flex;align-items:center;gap:8px"><div>' +
+                  avatarHtml +
+                  "<b>" +
+                  escapeHtml(u.nickname) +
+                  '</b></div><small style="color:var(--gray)">@' +
+                  escapeHtml(u.login) +
+                  "</small>" +
+                  adminBadge +
+                  banBadge +
+                  '</div><div style="text-align:center"><div style="font-weight:700;color:var(--primary)">' +
+                  u.reputation +
+                  '</div><small style="color:var(--gray)">репутация</small></div><div style="text-align:center"><div style="font-weight:700">' +
+                  u.total_benches +
+                  '</div><small style="color:var(--gray)">скамеек</small></div><div style="display:flex;gap:5px">' +
+                  (u.is_admin
+                    ? '<button class="btn-sm btn-hide" onclick="toggleAdmin(' +
+                      u.id +
+                      ',0)">Убрать админа</button>'
+                    : '<button class="btn-sm btn-approve" onclick="toggleAdmin(' +
+                      u.id +
+                      ',1)">Сделать админом</button>') +
+                  banBtn +
+                  '<button class="btn-sm btn-view" onclick="openMessageModal(' +
+                  u.id +
+                  ",'" +
+                  escapeHtml(u.nickname || "") +
+                  "')\">✉️ Сообщение</button>" +
+                  "</div></div>"
+                );
               })
               .join("");
           });
@@ -949,16 +989,20 @@
               document.getElementById("notificationsBadge").style.display =
                 "none";
             }
-          box.innerHTML =
+            box.innerHTML =
               '<button class="btn-sm" style="margin-bottom:10px;background:var(--red)" onclick="clearAdminNotifications()">🧹 Очистить прочитанные</button>' +
               '<button class="btn-sm" style="margin-left:10px;margin-bottom:10px;background:var(--green)" onclick="markAllNotificationsRead()">✓ Прочитать всё</button>' +
               d.notifications
                 .map(function (n) {
                   var related = n.related_id
-                    ? ' onclick="viewBench(' + n.related_id + ')" style="cursor:pointer"'
+                    ? ' onclick="viewBench(' +
+                      n.related_id +
+                      ')" style="cursor:pointer"'
                     : "";
                   return (
-                    '<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:15px;margin-bottom:10px"' + related + ">" +
+                    '<div style="background:var(--card);border:1px solid var(--border);border-radius:10px;padding:15px;margin-bottom:10px"' +
+                    related +
+                    ">" +
                     '<div style="font-weight:600">' +
                     escapeHtml(n.message) +
                     "</div>" +
@@ -975,7 +1019,7 @@
                   );
                 })
                 .join("");
-        });
+          });
       }
       function markAllNotificationsRead() {
         fetch("/api/admin/notifications/read", {
@@ -987,7 +1031,8 @@
           })
           .then(function (d) {
             if (d.success) {
-              document.getElementById("notificationsBadge").style.display = "none";
+              document.getElementById("notificationsBadge").style.display =
+                "none";
               loadNotifications();
             }
           });
@@ -1002,7 +1047,8 @@
           })
           .then(function (d) {
             if (d.success) {
-              document.getElementById("notificationsBadge").style.display = "none";
+              document.getElementById("notificationsBadge").style.display =
+                "none";
               loadNotifications();
             }
           });
@@ -1081,7 +1127,10 @@
       function renderAdminMapMarkers() {
         if (!adminMap) return;
         adminMap.geoObjects.removeAll();
-        fetch("/api/admin/benches", { headers: adminHeaders(), cache: "no-store" })
+        fetch("/api/admin/benches", {
+          headers: adminHeaders(),
+          cache: "no-store",
+        })
           .then(function (r) {
             return r.json();
           })

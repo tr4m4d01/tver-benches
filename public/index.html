@@ -21,7 +21,10 @@
       name="viewport"
       content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
     />
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate" />
+    <meta
+      http-equiv="Cache-Control"
+      content="no-cache, no-store, must-revalidate"
+    />
     <meta http-equiv="Pragma" content="no-cache" />
     <meta http-equiv="Expires" content="0" />
     <title>Скамейки Твери</title>
@@ -962,7 +965,8 @@
             <label>Пароль</label><input type="password" id="regPassword" />
           </div>
           <div class="form-group">
-            <label>Повторите пароль</label><input type="password" id="regPassword2" />
+            <label>Повторите пароль</label
+            ><input type="password" id="regPassword2" />
           </div>
           <button class="btn" onclick="doRegister()">Зарегистрироваться</button>
         </div>
@@ -1088,7 +1092,9 @@
     <div id="addModal" class="modal">
       <div class="modal-content">
         <div class="modal-header">
-          <button class="modal-nav" onclick="closeModal('addModal')"><i class="fa-solid fa-arrow-left"></i></button>
+          <button class="modal-nav" onclick="closeModal('addModal')">
+            <i class="fa-solid fa-arrow-left"></i>
+          </button>
           <h2>Новая скамейка</h2>
           <button class="close-btn" onclick="closeModal('addModal')">✕</button>
         </div>
@@ -1343,7 +1349,7 @@
 
       // ---- ПЕРЕКЛЮЧЕНИЕ ФОРМ ВХОДА/РЕГИСТРАЦИЯ ---------------------------
       // (удалено: авторизация теперь через Telegram)
-      
+
       function showToast(m) {
         var o = document.querySelector(".toast");
         if (o) o.remove();
@@ -1539,10 +1545,9 @@
                 lng: pos.coords.longitude,
               };
               if (userPlacemark) myMap.removeLayer(userPlacemark);
-              userPlacemark = L.marker(
-                [userPosition.lat, userPosition.lng],
-                { icon: createUserIcon() },
-              ).addTo(myMap);
+              userPlacemark = L.marker([userPosition.lat, userPosition.lng], {
+                icon: createUserIcon(),
+              }).addTo(myMap);
               myMap.setView([userPosition.lat, userPosition.lng], 16);
             },
             function () {
@@ -1554,13 +1559,13 @@
       // loadBenches(): загружает все активные скамейки (GET /api/benches),
       // очищает карту и расставляет метки. user_id передаётся, чтобы сервер
       // пометил, какие скамейки лайкнуты/в избранном у текущего пользователя.
-       function loadBenches() {
-         if (!mapInitialized || !myMap) return;
-         fetch(
-           "/api/benches?user_id=" +
-             (currentUser && currentUser.id ? currentUser.id : ""),
-           { cache: "no-store" },
-         )
+      function loadBenches() {
+        if (!mapInitialized || !myMap) return;
+        fetch(
+          "/api/benches?user_id=" +
+            (currentUser && currentUser.id ? currentUser.id : ""),
+          { cache: "no-store" },
+        )
           .then(function (r) {
             return r.json();
           })
@@ -1577,10 +1582,9 @@
               }
             });
             d.benches.forEach(function (b) {
-              var pm = L.marker(
-                [b.latitude, b.longitude],
-                { icon: createBenchIcon() },
-              ).addTo(myMap);
+              var pm = L.marker([b.latitude, b.longitude], {
+                icon: createBenchIcon(),
+              }).addTo(myMap);
               pm.on("click", function () {
                 showBenchCard(b);
               });
@@ -1681,7 +1685,9 @@
         var handle = document.getElementById("benchCardHandle");
         if (!handle) return;
         // Десктоп: клик по полоске закрывает карточку
-        handle.addEventListener("click", function () { closeBenchCard(); });
+        handle.addEventListener("click", function () {
+          closeBenchCard();
+        });
         handle.addEventListener("mousedown", onSwipeStart);
         handle.addEventListener("touchstart", onSwipeStart, { passive: true });
         function onSwipeStart(e) {
@@ -1926,8 +1932,6 @@
         document.getElementById("reviewsModal").classList.remove("active");
         var o = document.createElement("div");
         o.className = "overlay-modal";
-        var o = document.createElement("div");
-        o.className = "overlay-modal";
         o.innerHTML =
           '<div class="overlay-box" style="position:relative"><h3>Отзыв</h3><div id="stars">' +
           [1, 2, 3, 4, 5]
@@ -2104,26 +2108,26 @@
         searchTimeout = setTimeout(function () {
           var errEl = document.getElementById("searchError");
           if (errEl) errEl.classList.remove("active");
-        var q = document.getElementById("searchInput").value.trim();
-        var list = document.getElementById("searchResultsList");
-        var addrList = document.getElementById("addressResults");
-        if (!q || q.length < 2) {
-          // Поле очищено — прячем и живые подсказки, и результаты адресного поиска
-          if (list) list.classList.remove("active");
+          var q = document.getElementById("searchInput").value.trim();
+          var list = document.getElementById("searchResultsList");
+          var addrList = document.getElementById("addressResults");
+          if (!q || q.length < 2) {
+            // Поле очищено — прячем и живые подсказки, и результаты адресного поиска
+            if (list) list.classList.remove("active");
+            if (addrList) {
+              addrList.style.display = "none";
+              addrList.innerHTML = "";
+            }
+            return;
+          }
+          // Показываем только «живые» подсказки, прячем результаты по адресу
           if (addrList) {
             addrList.style.display = "none";
             addrList.innerHTML = "";
           }
-          return;
-        }
-        // Показываем только «живые» подсказки, прячем результаты по адресу
-        if (addrList) {
-          addrList.style.display = "none";
-          addrList.innerHTML = "";
-        }
-        list.innerHTML =
-          '<p style="padding:14px;color:var(--gray)">Поиск...</p>';
-        list.classList.add("active");
+          list.innerHTML =
+            '<p style="padding:14px;color:var(--gray)">Поиск...</p>';
+          list.classList.add("active");
           fetch("/api/geocode?q=" + encodeURIComponent("Тверь, " + q))
             .then(function (r) {
               return r.json();
@@ -2176,8 +2180,7 @@
             "</span>";
           d.onclick = function () {
             l.classList.remove("active");
-            if (myMap)
-              myMap.setView([r.bench.latitude, r.bench.longitude], 17);
+            if (myMap) myMap.setView([r.bench.latitude, r.bench.longitude], 17);
             showBenchCard(r.bench);
           };
           l.appendChild(d);
@@ -2205,32 +2208,32 @@
           if (e.target === o) o.remove();
         });
         document.body.appendChild(o);
-       }
-       // syncCenterCoords(): пока открыто окно добавления скамейки, держит
-       // userPosition синхронным с центром карты — скамейка ставится туда,
-       // куда указывает центральный маркер (marker-drag-overlay). Вызывается
-       // Leaflet при панорамировании карты (move / moveend). Самоотписывается,
-       // если окно закрыто любым способом (тап по фону, Back и т. п.).
-       function syncCenterCoords() {
-         var am = document.getElementById("addModal");
-         if (!am || !am.classList.contains("active")) {
-           if (myMap) {
-             myMap.off("move", syncCenterCoords);
-             myMap.off("moveend", syncCenterCoords);
-           }
-           return;
-         }
-         if (!myMap || !userPosition) return;
-         var c = myMap.getCenter();
-         userPosition.lat = c.lat;
-         userPosition.lng = c.lng;
-         var coordsEl = document.getElementById("benchCoords");
-         if (coordsEl) {
-           coordsEl.textContent =
-             "Координаты: " + c.lat.toFixed(5) + ", " + c.lng.toFixed(5);
-         }
-       }
-       function openAddModal() {
+      }
+      // syncCenterCoords(): пока открыто окно добавления скамейки, держит
+      // userPosition синхронным с центром карты — скамейка ставится туда,
+      // куда указывает центральный маркер (marker-drag-overlay). Вызывается
+      // Leaflet при панорамировании карты (move / moveend). Самоотписывается,
+      // если окно закрыто любым способом (тап по фону, Back и т. п.).
+      function syncCenterCoords() {
+        var am = document.getElementById("addModal");
+        if (!am || !am.classList.contains("active")) {
+          if (myMap) {
+            myMap.off("move", syncCenterCoords);
+            myMap.off("moveend", syncCenterCoords);
+          }
+          return;
+        }
+        if (!myMap || !userPosition) return;
+        var c = myMap.getCenter();
+        userPosition.lat = c.lat;
+        userPosition.lng = c.lng;
+        var coordsEl = document.getElementById("benchCoords");
+        if (coordsEl) {
+          coordsEl.textContent =
+            "Координаты: " + c.lat.toFixed(5) + ", " + c.lng.toFixed(5);
+        }
+      }
+      function openAddModal() {
         if (!currentUser) {
           showToast("Войдите");
           return;
@@ -2916,8 +2919,8 @@
           var bell = document.getElementById("notifBellBtn");
           if (bell) {
             var rect = bell.getBoundingClientRect();
-            panel.style.bottom = (window.innerHeight - rect.top + 12) + "px";
-            panel.style.right = (window.innerWidth - rect.right) + "px";
+            panel.style.bottom = window.innerHeight - rect.top + 12 + "px";
+            panel.style.right = window.innerWidth - rect.right + "px";
           }
           panel.classList.add("active");
           loadNotificationsPanel();
@@ -2948,7 +2951,7 @@
               headers: authHeaders(),
             });
             list.innerHTML = d.notifications
-ы              .map(function (n) {
+              .map(function (n) {
                 return (
                   '<div class="notif-item">' +
                   '<div class="notif-msg">' +
@@ -3047,17 +3050,17 @@
           document.getElementById("mainApp").style.height = "";
         }
       });
-       document.addEventListener("visibilitychange", function () {
-         if (!document.hidden) {
-           if (mapInitialized && myMap) {
-             refreshMap();
-           }
-           if (currentUser) {
-             updateNotifBadge();
-           }
-         }
-       });
-        checkAuth();
+      document.addEventListener("visibilitychange", function () {
+        if (!document.hidden) {
+          if (mapInitialized && myMap) {
+            refreshMap();
+          }
+          if (currentUser) {
+            updateNotifBadge();
+          }
+        }
+      });
+      checkAuth();
       // Инициализируем swipe-to-close для карточки скамейки
       setTimeout(function () {
         initBenchCardSwipe();

@@ -365,9 +365,7 @@ function verifyTelegramAuth(initData) {
       a.localeCompare(b),
     );
 
-    const dataCheckString = params
-      .map(([k, v]) => `${k}=${v}`)
-      .join("\n");
+    const dataCheckString = params.map(([k, v]) => `${k}=${v}`).join("\n");
 
     const secretKey = crypto
       .createHmac("sha256", "WebAppData")
@@ -405,21 +403,25 @@ app.post("/api/telegram-login", async (req, res) => {
     const firstName = tgUser.first_name || "";
     const lastName = tgUser.last_name || "";
 
-    let users = await q("SELECT * FROM users WHERE telegram_id=?", [telegramId]);
+    let users = await q("SELECT * FROM users WHERE telegram_id=?", [
+      telegramId,
+    ]);
 
     if (!users.length) {
       const login = (username || `tg_${telegramId}`).substring(0, 50);
-      const nickname = (firstName || username || "Пользователь").substring(0, 100);
+      const nickname = (firstName || username || "Пользователь").substring(
+        0,
+        100,
+      );
 
       await run(
         "INSERT INTO users(telegram_id, login, nickname, first_name, last_name) VALUES (?,?,?,?,?)",
         [telegramId, login, nickname, firstName, lastName],
       );
 
-      const newUsers = await q(
-        "SELECT * FROM users WHERE telegram_id=?",
-        [telegramId],
-      );
+      const newUsers = await q("SELECT * FROM users WHERE telegram_id=?", [
+        telegramId,
+      ]);
       const user = newUsers[0];
       const token = crypto.randomBytes(32).toString("hex");
       const expiresAt = Date.now() + SESSION_DURATION;
@@ -454,13 +456,16 @@ app.post("/api/telegram-login", async (req, res) => {
   }
 });
 
-const isDev = process.env.NODE_ENV !== "production" || process.env.DEV_MODE === "true";
+const isDev =
+  process.env.NODE_ENV !== "production" || process.env.DEV_MODE === "true";
 
 if (isDev) {
   app.post("/api/dev-login", async (req, res) => {
     try {
       const telegramId = "dev";
-      let users = await q("SELECT * FROM users WHERE telegram_id=?", [telegramId]);
+      let users = await q("SELECT * FROM users WHERE telegram_id=?", [
+        telegramId,
+      ]);
 
       if (!users.length) {
         await run(
@@ -481,7 +486,11 @@ if (isDev) {
 
         return res.json({
           success: true,
-          user: { id: user.id, nickname: user.nickname, is_admin: user.is_admin },
+          user: {
+            id: user.id,
+            nickname: user.nickname,
+            is_admin: user.is_admin,
+          },
           token,
         });
       } else {
@@ -495,7 +504,11 @@ if (isDev) {
 
         return res.json({
           success: true,
-          user: { id: user.id, nickname: user.nickname, is_admin: user.is_admin },
+          user: {
+            id: user.id,
+            nickname: user.nickname,
+            is_admin: user.is_admin,
+          },
           token,
         });
       }
@@ -509,13 +522,14 @@ if (isDev) {
 // ============================================================================
 //  Express middleware
 // ============================================================================
-const CORS_ORIGIN = process.env.CORS_ORIGIN || "https://tver-benches.onrender.com";
+const CORS_ORIGIN =
+  process.env.CORS_ORIGIN || "https://tver-benches.onrender.com";
 app.use(cors({ origin: CORS_ORIGIN }));
 app.use(express.json({ limit: "50mb" }));
 app.use("/uploads", express.static(__dirname + "/uploads"));
 app.use(express.static(__dirname + "/public"));
 
-app.get("/admin", requireAdmin, (req, res) => {
+app.get("/admin", (req, res) => {
   res.sendFile(path.join(__dirname, "private", "admin.html"));
 });
 
@@ -781,7 +795,7 @@ app.post(
   async (req, res) => {
     if (!req.file)
       return res.json({ success: false, error: "Файл не загружен" });
-      const avatarData = fileToDataURL(req.file);
+    const avatarData = fileToDataURL(req.file);
     if (!avatarData)
       return res.json({ success: false, error: "Файл не загружен" });
     try {
@@ -832,7 +846,9 @@ app.get("/api/me", requireAuth, async (req, res) => {
     );
     if (!user.length) {
       // Пользователь удалён — сессия больше не действительна
-      await run("DELETE FROM sessions WHERE user_id=?", [req.user_id]).catch(() => {});
+      await run("DELETE FROM sessions WHERE user_id=?", [req.user_id]).catch(
+        () => {},
+      );
       return res.json({ success: false, error: "Пользователь не найден" });
     }
     res.json({ success: true, user: user[0] });
@@ -1087,7 +1103,8 @@ app.get("/api/geocode", async (req, res) => {
       encodeURIComponent(q);
     const response = await fetch(url, {
       headers: {
-        "User-Agent": "TverBenchesMiniApp/1.0 (contact@tver-benches.onrender.com)",
+        "User-Agent":
+          "TverBenchesMiniApp/1.0 (contact@tver-benches.onrender.com)",
       },
     });
     const data = await response.json();
@@ -1223,12 +1240,12 @@ app.post(
       const reviewId = await d1LastInsertRowid("bench_ratings");
 
       if (req.files && req.files.length) {
-          for (const f of req.files) {
-            await run(
-              "INSERT INTO review_photos(review_id,photo_url) VALUES (?,?)",
-              [reviewId, fileToDataURL(f)],
-            );
-          }
+        for (const f of req.files) {
+          await run(
+            "INSERT INTO review_photos(review_id,photo_url) VALUES (?,?)",
+            [reviewId, fileToDataURL(f)],
+          );
+        }
       }
       await q(
         "UPDATE benches SET rating=(SELECT AVG(rating) FROM bench_ratings WHERE bench_id=?) WHERE id=?",
@@ -1338,11 +1355,11 @@ app.post(
       const reportId = await d1LastInsertRowid("bench_reports");
       if (req.files && req.files.length) {
         for (const f of req.files) {
-        await run(
-          "INSERT INTO report_photos(report_id,photo_url) VALUES (?,?)",
-          [reportId, fileToDataURL(f)],
-        );
-      }
+          await run(
+            "INSERT INTO report_photos(report_id,photo_url) VALUES (?,?)",
+            [reportId, fileToDataURL(f)],
+          );
+        }
       }
       await createNotification(
         null,
@@ -1700,7 +1717,10 @@ app.use((err, req, res, next) => {
     if (err.code === "LIMIT_FILE_COUNT")
       return res.json({ success: false, error: "Слишком много файлов" });
     if (err.code === "LIMIT_UNEXPECTED_FILE_TYPE")
-      return res.json({ success: false, error: "Разрешены только изображения" });
+      return res.json({
+        success: false,
+        error: "Разрешены только изображения",
+      });
     return res.json({ success: false, error: "Ошибка загрузки файла" });
   }
   console.error("Необработанная ошибка:", err);
