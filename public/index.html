@@ -61,7 +61,7 @@
          Акцент — приглушённый зелёно-синий. Фон — тёмный градиент.
          Карточки — полупрозрачные стеклянные панели. */
       :root {
-        --primary: #6C8B8C;
+        --primary: #6c8b8c;
         --primary-dark: #5a7677;
         --page-bg: #0b0d0f;
         --card: rgba(255, 255, 255, 0.06);
@@ -71,7 +71,7 @@
         --border: rgba(255, 255, 255, 0.08);
         --input-bg: rgba(255, 255, 255, 0.05);
         --soft: rgba(255, 255, 255, 0.03);
-        --green: #6C8B8C;
+        --green: #6c8b8c;
         --red: #c45c5c;
         --yellow: #c4a35a;
         --shadow-card: 0 10px 30px rgba(0, 0, 0, 0.4);
@@ -880,7 +880,7 @@
         transform: translate(-50%, -100%);
         z-index: 10000;
         pointer-events: none;
-        filter: drop-shadow(0 0 6px rgba(108,139,140,0.6));
+        filter: drop-shadow(0 0 6px rgba(108, 139, 140, 0.6));
       }
       .marker-drag-overlay i {
         font-size: 2.8em;
@@ -919,7 +919,7 @@
       }
       /* Temporary placement marker */
       .temp-placemark {
-        filter: drop-shadow(0 2px 4px rgba(0,0,0,0.5));
+        filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.5));
       }
       @media (min-width: 768px) {
         #mainApp {
@@ -988,19 +988,18 @@
       =====================================================================
     -->
 
-     <!-- ЭКРАН ПОДКЛЮЧЕНИЯ: авторизация происходит прозрачно через Telegram
+    <!-- ЭКРАН ПОДКЛЮЧЕНИЯ: авторизация происходит прозрачно через Telegram
           WebApp, без форм входа. Показывается только процесс авторизации. -->
-     <div id="authScreen">
-       <div class="auth-card">
-         <div class="auth-logo"><i class="fa-solid fa-location-dot"></i></div>
-         <div class="auth-title">Скамейки Твери</div>
-         <div class="auth-subtitle">
-           <i class="fa-solid fa-spinner fa-spin"></i>
-           <span id="authStatus">Подключение к Telegram…</span>
-         </div>
-       </div>
-     </div>
-
+    <div id="authScreen">
+      <div class="auth-card">
+        <div class="auth-logo"><i class="fa-solid fa-location-dot"></i></div>
+        <div class="auth-title">Скамейки Твери</div>
+        <div class="auth-subtitle">
+          <i class="fa-solid fa-spinner fa-spin"></i>
+          <span id="authStatus">Подключение к Telegram…</span>
+        </div>
+      </div>
+    </div>
 
     <!-- ОСНОВНОЙ ЭКРАН ПРИЛОЖЕНИЯ (карта + интерфейс).
          Становится видимым после успешного входа (класс .active). -->
@@ -1105,7 +1104,9 @@
       <div class="modal-content">
         <div class="modal-header">
           <h2>Отзывы</h2>
-          <button class="close-btn" onclick="closeModal('reviewsModal')"><i class="fa-solid fa-xmark"></i></button>
+          <button class="close-btn" onclick="closeModal('reviewsModal')">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
         </div>
         <div id="reviewsContent"></div>
       </div>
@@ -1115,16 +1116,20 @@
       <div class="modal-content">
         <div class="modal-header">
           <h2>Профиль</h2>
-          <button class="close-btn" onclick="closeModal('profileModal')"><i class="fa-solid fa-xmark"></i></button>
+          <button class="close-btn" onclick="closeModal('profileModal')">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
         </div>
         <div id="profileContent"></div>
       </div>
     </div>
-     <div id="addModal" class="modal">
+    <div id="addModal" class="modal">
       <div class="modal-content">
         <div class="modal-header">
           <h2>Новое место</h2>
-          <button class="close-btn" onclick="closeModal('addModal')"><i class="fa-solid fa-xmark"></i></button>
+          <button class="close-btn" onclick="closeModal('addModal')">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
         </div>
         <div id="addModalContent"></div>
       </div>
@@ -1133,7 +1138,9 @@
       <div class="modal-content">
         <div class="modal-header">
           <h2>Поблизости</h2>
-          <button class="close-btn" onclick="closeModal('nearbyModal')"><i class="fa-solid fa-xmark"></i></button>
+          <button class="close-btn" onclick="closeModal('nearbyModal')">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
         </div>
         <div id="nearbyContent"></div>
       </div>
@@ -1142,7 +1149,9 @@
       <div class="modal-content">
         <div class="modal-header">
           <h2>Топ</h2>
-          <button class="close-btn" onclick="closeModal('topModal')"><i class="fa-solid fa-xmark"></i></button>
+          <button class="close-btn" onclick="closeModal('topModal')">
+            <i class="fa-solid fa-xmark"></i>
+          </button>
         </div>
         <div id="topContent"></div>
       </div>
@@ -1437,64 +1446,105 @@
       }
       // ---- ПЕРЕКЛЮЧЕНИЕ ФОРМ ВХОДА/РЕГИСТРАЦИИ ---------------------------
       // ---- ПРОЗРАЧНАЯ АВТОРИЗАЦИЯ ЧЕРЕЗ TELEGRAM WEBAPP -----------------
+      // waitForInitData(): на Telegram Web (и иногда в других клиентах)
+      // initData может быть недоступен сразу при загрузке страницы —
+      // Telegram Web передаёт его через postMessage чуть позже.
+      // Эта функция ждёт появления initData, проверяя его несколько раз
+      // с небольшой паузой, прежде чем сдаться.
+      function waitForInitData(maxAttempts, delayMs) {
+        maxAttempts = maxAttempts || 10;
+        delayMs = delayMs || 150;
+        return new Promise(function (resolve) {
+          var attempts = 0;
+          function check() {
+            var initData =
+              (window.Telegram &&
+                window.Telegram.WebApp &&
+                window.Telegram.WebApp.initData) ||
+              "";
+            if (initData) {
+              resolve(initData);
+              return;
+            }
+            attempts++;
+            if (attempts >= maxAttempts) {
+              resolve(""); // так и не дождались — вернём пустую строку как раньше
+              return;
+            }
+            setTimeout(check, delayMs);
+          }
+          check();
+        });
+      }
+
       // telegramAuth(): отправляет initData на /api/auth/telegram и сохраняет JWT.
       // Возвращает Promise<boolean> (успех авторизации).
       function telegramAuth() {
-        return new Promise(function (resolve) {
-          var initData =
-            (window.Telegram &&
-              window.Telegram.WebApp &&
-              window.Telegram.WebApp.initData) ||
-            "";
-          fetch("/api/auth/telegram", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ initData: initData }),
-          })
-            .then(function (r) {
-              return r.json();
+        return waitForInitData().then(function (initData) {
+          // --- ВРЕМЕННЫЙ ДИАГНОСТИЧЕСКИЙ ЛОГ (удалить после отладки) ---
+          console.log("=== DEBUG telegramAuth (frontend) ===");
+          console.log("window.Telegram существует?", !!window.Telegram);
+          console.log(
+            "window.Telegram.WebApp существует?",
+            !!(window.Telegram && window.Telegram.WebApp),
+          );
+          console.log("initData из waitForInitData:", JSON.stringify(initData));
+          console.log("initData длина:", initData ? initData.length : 0);
+          // --- конец диагностики ---
+          return new Promise(function (resolve) {
+            fetch("/api/auth/telegram", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ initData: initData }),
             })
-            .then(function (d) {
-              if (d.success && d.token) {
-                currentUser = d.user;
-                currentUser.token = d.token;
-                localStorage.setItem("tver_user", JSON.stringify(currentUser));
-                resolve(true);
-                return;
-              }
-              // Если не внутри Telegram WebApp — dev-логин (только в dev-режиме)
-              if (!initData) {
-                fetch("/api/auth/dev-login", {
-                  method: "POST",
-                  headers: { "Content-Type": "application/json" },
-                  body: "{}",
-                })
-                  .then(function (r) {
-                    return r.json();
+              .then(function (r) {
+                return r.json();
+              })
+              .then(function (d) {
+                if (d.success && d.token) {
+                  currentUser = d.user;
+                  currentUser.token = d.token;
+                  localStorage.setItem(
+                    "tver_user",
+                    JSON.stringify(currentUser),
+                  );
+                  resolve(true);
+                  return;
+                }
+                // Если не внутри Telegram WebApp — dev-логин (только в dev-режиме)
+                if (!initData) {
+                  fetch("/api/auth/dev-login", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: "{}",
                   })
-                  .then(function (dd) {
-                    if (dd.success && dd.token) {
-                      currentUser = dd.user;
-                      currentUser.token = dd.token;
-                      localStorage.setItem(
-                        "tver_user",
-                        JSON.stringify(currentUser),
-                      );
-                      resolve(true);
-                    } else {
+                    .then(function (r) {
+                      return r.json();
+                    })
+                    .then(function (dd) {
+                      if (dd.success && dd.token) {
+                        currentUser = dd.user;
+                        currentUser.token = dd.token;
+                        localStorage.setItem(
+                          "tver_user",
+                          JSON.stringify(currentUser),
+                        );
+                        resolve(true);
+                      } else {
+                        resolve(false);
+                      }
+                    })
+                    .catch(function () {
                       resolve(false);
-                    }
-                  })
-                  .catch(function () {
-                    resolve(false);
-                  });
-              } else {
+                    });
+                } else {
+                  resolve(false);
+                }
+              })
+              .catch(function () {
                 resolve(false);
-              }
-            })
-            .catch(function () {
-              resolve(false);
-            });
+              });
+          });
         });
       }
 
@@ -2347,7 +2397,10 @@
           });
           syncCenterCoords();
           addMapClickHandler = function (e) {
-            if (!document.getElementById("addModal").classList.contains("active")) return;
+            if (
+              !document.getElementById("addModal").classList.contains("active")
+            )
+              return;
             if (!benchPlacemark) return;
             var ll = e.latlng;
             benchPlacemark.setLatLng([ll.lat, ll.lng]);
@@ -2461,17 +2514,11 @@
               closeModal("addModal");
               showToast("Отправлено на модерацию");
             } else {
-              showOverlay(
-                "Ошибка",
-                d.error || "Не удалось добавить",
-              );
+              showOverlay("Ошибка", d.error || "Не удалось добавить");
             }
           })
           .catch(function () {
-            showOverlay(
-              "Ошибка",
-              "Ошибка соединения с сервером",
-            );
+            showOverlay("Ошибка", "Ошибка соединения с сервером");
           });
       }
       function showNearby() {
@@ -2863,10 +2910,7 @@
               updateUser(nick, phone, email);
             })
             .catch(function () {
-                showOverlay(
-                  "Ошибка",
-                  "Не удалось загрузить аватар",
-                );
+              showOverlay("Ошибка", "Не удалось загрузить аватар");
             });
         } else {
           updateUser(nick, phone, email);
