@@ -46,6 +46,8 @@
       href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
     />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Telegram WebApp SDK (для прозрачной авторизации через initData) -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
       /* =======================================================================
          БЛОК СТИЛЕЙ (CSS)
@@ -986,45 +988,19 @@
       =====================================================================
     -->
 
-     <!-- ЭКРАН ВХОДА: форма авторизации и регистрации -->
-    <div id="authScreen">
-      <div class="auth-card">
-        <div class="auth-logo"><i class="fa-solid fa-location-dot"></i></div>
-        <div class="auth-title">Скамейки Твери</div>
-        <div class="auth-subtitle">
-          Карта мест Твери
-        </div>
-        <div class="auth-tabs">
-          <div class="auth-tab active" onclick="showLogin()">Вход</div>
-          <div class="auth-tab" onclick="showRegister()">Регистрация</div>
-        </div>
-        <div id="loginBox">
-          <div class="form-group">
-            <label>Логин</label><input type="text" id="loginLogin" />
-          </div>
-          <div class="form-group">
-            <label>Пароль</label><input type="password" id="loginPassword" />
-          </div>
-          <button class="btn" onclick="doLogin()">Войти</button>
-        </div>
-        <div id="registerBox" style="display: none">
-          <div class="form-group">
-            <label>Логин (англ.)</label><input type="text" id="regLogin" />
-          </div>
-          <div class="form-group">
-            <label>Никнейм</label><input type="text" id="regNickname" />
-          </div>
-          <div class="form-group">
-            <label>Пароль</label><input type="password" id="regPassword" />
-          </div>
-          <div class="form-group">
-            <label>Повторите пароль</label
-            ><input type="password" id="regPassword2" />
-          </div>
-          <button class="btn" onclick="doRegister()">Зарегистрироваться</button>
-        </div>
-      </div>
-    </div>
+     <!-- ЭКРАН ПОДКЛЮЧЕНИЯ: авторизация происходит прозрачно через Telegram
+          WebApp, без форм входа. Показывается только процесс авторизации. -->
+     <div id="authScreen">
+       <div class="auth-card">
+         <div class="auth-logo"><i class="fa-solid fa-location-dot"></i></div>
+         <div class="auth-title">Скамейки Твери</div>
+         <div class="auth-subtitle">
+           <i class="fa-solid fa-spinner fa-spin"></i>
+           <span id="authStatus">Подключение к Telegram…</span>
+         </div>
+       </div>
+     </div>
+
 
     <!-- ОСНОВНОЙ ЭКРАН ПРИЛОЖЕНИЯ (карта + интерфейс).
          Становится видимым после успешного входа (класс .active). -->
@@ -1147,9 +1123,6 @@
      <div id="addModal" class="modal">
       <div class="modal-content">
         <div class="modal-header">
-          <button class="modal-nav" onclick="closeModal('addModal')">
-            <i class="fa-solid fa-arrow-left"></i>
-          </button>
           <h2>Новое место</h2>
           <button class="close-btn" onclick="closeModal('addModal')"><i class="fa-solid fa-xmark"></i></button>
         </div>
@@ -1323,6 +1296,7 @@
       function closeModal(id) {
         document.getElementById(id).classList.remove("active");
         if (id === "addModal") {
+          window.__pickingLocation = false;
           if (myMap) {
             myMap.off("move", syncCenterCoords);
             myMap.off("moveend", syncCenterCoords);
@@ -1462,83 +1436,121 @@
         el.closest(".overlay-modal").remove();
       }
       // ---- ПЕРЕКЛЮЧЕНИЕ ФОРМ ВХОДА/РЕГИСТРАЦИИ ---------------------------
-      function showLogin() {
-        document.querySelectorAll(".auth-tab")[0].classList.add("active");
-        document.querySelectorAll(".auth-tab")[1].classList.remove("active");
-        document.getElementById("loginBox").style.display = "block";
-        document.getElementById("registerBox").style.display = "none";
-      }
-      function showRegister() {
-        document.querySelectorAll(".auth-tab")[1].classList.add("active");
-        document.querySelectorAll(".auth-tab")[0].classList.remove("active");
-        document.getElementById("registerBox").style.display = "block";
-        document.getElementById("loginBox").style.display = "none";
-      }
-      // ---- РЕГИСТРАЦИЯ ----------------------------------------------------
-      function doRegister() {
-        var l = document.getElementById("regLogin").value.trim(),
-          n = document.getElementById("regNickname").value.trim(),
-          p = document.getElementById("regPassword").value,
-          p2 = document.getElementById("regPassword2").value;
-        if (!l || !n || !p || !p2) {
-          showToast("Заполните все поля");
-          return;
-        }
-        if (p !== p2) {
-          showToast("Пароли не совпадают");
-          return;
-        }
-        fetch("/api/register", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ login: l, password: p, nickname: n }),
-        })
-          .then(function (r) {
-            return r.json();
+      // ---- ПРОЗРАЧНАЯ АВТОРИЗАЦИЯ ЧЕРЕЗ TELEGRAM WEBAPP -----------------
+      // telegramAuth(): отправляет initData на /api/auth/telegram и сохраняет JWT.
+      // Возвращает Promise<boolean> (успех авторизации).
+      function telegramAuth() {
+        return new Promise(function (resolve) {
+          var initData =
+            (window.Telegram &&
+              window.Telegram.WebApp &&
+              window.Telegram.WebApp.initData) ||
+            "";
+          fetch("/api/auth/telegram", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ initData: initData }),
           })
-          .then(function (d) {
-            if (d.success) {
-              showToast("Регистрация завершена");
-              showLogin();
-            } else {
-              showToast(d.error || "Не удалось завершить регистрацию");
-            }
-          });
+            .then(function (r) {
+              return r.json();
+            })
+            .then(function (d) {
+              if (d.success && d.token) {
+                currentUser = d.user;
+                currentUser.token = d.token;
+                localStorage.setItem("tver_user", JSON.stringify(currentUser));
+                resolve(true);
+                return;
+              }
+              // Если не внутри Telegram WebApp — dev-логин (только в dev-режиме)
+              if (!initData) {
+                fetch("/api/auth/dev-login", {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: "{}",
+                })
+                  .then(function (r) {
+                    return r.json();
+                  })
+                  .then(function (dd) {
+                    if (dd.success && dd.token) {
+                      currentUser = dd.user;
+                      currentUser.token = dd.token;
+                      localStorage.setItem(
+                        "tver_user",
+                        JSON.stringify(currentUser),
+                      );
+                      resolve(true);
+                    } else {
+                      resolve(false);
+                    }
+                  })
+                  .catch(function () {
+                    resolve(false);
+                  });
+              } else {
+                resolve(false);
+              }
+            })
+            .catch(function () {
+              resolve(false);
+            });
+        });
       }
-      // ---- ВХОД ------------------------------------------------------------
-      function doLogin() {
-        var l = document.getElementById("loginLogin").value.trim(),
-          p = document.getElementById("loginPassword").value;
-        if (!l || !p) {
-          showToast("Введите логин и пароль");
-          return;
-        }
-        fetch("/api/login", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ login: l, password: p }),
-        })
-          .then(function (r) {
-            return r.json();
-          })
-          .then(function (d) {
-            if (d.success) {
-              currentUser = d.user;
-              currentUser.token = d.token;
-              localStorage.setItem("tver_user", JSON.stringify(currentUser));
-              document.getElementById("authScreen").classList.add("hidden");
-              document.getElementById("mainApp").classList.add("active");
-              refreshMap();
-              setTimeout(function () {
-                updateNotifBadge();
-              }, 500);
-            } else {
-              showToast(d.error || "Не удалось войти");
+
+      // Централизованная обёртка fetch: подставляет заголовок Authorization
+      // (Bearer <JWT>) ко всем запросам и, при ответе 401, автоматически
+      // повторяет авторизацию через Telegram, затем повторяет исходный запрос.
+      // Эндпоинты /api/auth/* сами не вызывают повторную авторизацию (чтобы
+      // избежать рекурсии).
+      (function () {
+        var _origFetch = window.fetch ? window.fetch.bind(window) : null;
+        window.fetch = function (url, opts) {
+          opts = opts || {};
+          opts.headers = Object.assign({}, authHeaders(), opts.headers || {});
+          if (!_origFetch) return Promise.resolve();
+          return _origFetch(url, opts).then(function (resp) {
+            var u = typeof url === "string" ? url : "";
+            if (resp.status === 401 && u.indexOf("/api/auth/") === -1) {
+              if (!window.__reauthPromise) {
+                window.__reauthPromise = telegramAuth().then(function (ok) {
+                  window.__reauthPromise = null;
+                  return ok;
+                });
+              }
+              return window.__reauthPromise.then(function (ok) {
+                if (!ok) return resp;
+                var opts2 = Object.assign({}, opts, {
+                  headers: Object.assign({}, authHeaders(), opts.headers || {}),
+                });
+                return _origFetch(url, opts2);
+              });
             }
+            return resp;
           });
+        };
+      })();
+
+      function enterApp() {
+        var auth = document.getElementById("authScreen");
+        var app = document.getElementById("mainApp");
+        if (auth) auth.classList.add("hidden");
+        if (app) app.classList.add("active");
+        refreshMap();
+        setTimeout(function () {
+          updateNotifBadge();
+        }, 500);
       }
-      // checkAuth(): при загрузке страницы проверяет сохранённый в localStorage
-      // аккаунт и VERIFIES его сессию на сервере (GET /api/me).
+
+      function showAuthError() {
+        var el = document.getElementById("authStatus");
+        if (el)
+          el.textContent =
+            "Не удалось авторизоваться. Откройте приложение через Telegram.";
+      }
+
+      // checkAuth(): при загрузке проверяет сохранённый JWT, либо сразу
+      // выполняет прозрачную авторизацию через Telegram (без форм входа).
       function checkAuth() {
         var s = localStorage.getItem("tver_user");
         if (s) {
@@ -1548,43 +1560,37 @@
             currentUser = null;
           }
         }
-        if (!currentUser || !currentUser.token) {
-          showLoginScreen();
-          return;
-        }
-        fetch("/api/me", { headers: authHeaders() })
-          .then(function (r) {
-            return r.json();
-          })
-          .then(function (d) {
-            if (d.success && d.user) {
-              var token = currentUser.token;
-              currentUser = d.user;
-              currentUser.token = token;
-              currentUser.id = currentUser.id || d.user.id;
-              localStorage.setItem("tver_user", JSON.stringify(currentUser));
-              document.getElementById("authScreen").classList.add("hidden");
-              document.getElementById("mainApp").classList.add("active");
-              refreshMap();
-            } else {
-              invalidateSession();
-            }
-          })
-          .catch(function () {
-            invalidateSession();
+        if (currentUser && currentUser.token) {
+          fetch("/api/me", { headers: authHeaders() })
+            .then(function (r) {
+              return r.json();
+            })
+            .then(function (d) {
+              if (d.success && d.user) {
+                var token = currentUser.token;
+                currentUser = d.user;
+                currentUser.token = token;
+                localStorage.setItem("tver_user", JSON.stringify(currentUser));
+                enterApp();
+              } else {
+                telegramAuth().then(function (ok) {
+                  if (ok) enterApp();
+                  else showAuthError();
+                });
+              }
+            })
+            .catch(function () {
+              telegramAuth().then(function (ok) {
+                if (ok) enterApp();
+                else showAuthError();
+              });
+            });
+        } else {
+          telegramAuth().then(function (ok) {
+            if (ok) enterApp();
+            else showAuthError();
           });
-      }
-      function invalidateSession() {
-        currentUser = null;
-        localStorage.removeItem("tver_user");
-        showLoginScreen();
-      }
-      function showLoginScreen() {
-        var auth = document.getElementById("authScreen");
-        var app = document.getElementById("mainApp");
-        if (auth) auth.classList.remove("hidden");
-        if (app) app.classList.remove("active");
-        hidePreloader();
+        }
       }
       // refreshMap(): если карта уже инициализирована (но контейнер был скрыт),
       // перестраиваем её (invalidateSize); иначе инициализируем карту.
@@ -2311,7 +2317,7 @@
           return;
         }
         document.getElementById("addModalContent").innerHTML =
-          '<div class="form-group"><label>Фото</label><input type="file" id="modalPhotoInput" accept="image/*" capture="environment" multiple></div><div id="photoPreview" style="display:flex;gap:10px;flex-wrap:wrap"></div><div class="form-group"><label>Описание</label><textarea id="modalBenchDesc" rows="3"></textarea></div><div class="form-group" style="text-align:center"><i class="fa-solid fa-map-pin" style="color:var(--primary);font-size:1.5em"></i><div id="benchCoords" style="font-size:12px;color:var(--gray);margin-top:5px">Координаты: загружаются...</div></div><div style="display:flex;gap:10px;justify-content:flex-end"><button class="btn primary" onclick="saveBench()">Отправить</button><button class="btn" type="button" onclick="closeModal(\'addModal\')">Отмена</button></div>';
+          '<div class="form-group"><label>Фото</label><input type="file" id="modalPhotoInput" accept="image/*" capture="environment" multiple></div><div id="photoPreview" style="display:flex;gap:10px;flex-wrap:wrap"></div><div class="form-group"><label>Описание</label><textarea id="modalBenchDesc" rows="3"></textarea></div><div class="form-group" style="text-align:center"><i class="fa-solid fa-map-pin" style="color:var(--primary);font-size:1.5em"></i><div id="benchCoords" style="font-size:12px;color:var(--gray);margin-top:5px">Координаты: загружаются...</div><button class="btn" type="button" style="width:100%;margin-top:8px" onclick="pickPreciseLocation()"><i class="fa-solid fa-location-crosshairs"></i> Уточнить локацию</button></div><div style="display:flex;gap:10px;justify-content:flex-end"><button class="btn primary" onclick="saveBench()">Отправить</button><button class="btn" type="button" onclick="closeModal(\'addModal\')">Отмена</button></div>';
         document.getElementById("addModal").classList.add("active");
         var overlay = document.getElementById("markerDragOverlay");
         if (overlay) overlay.style.display = "flex";
@@ -2368,6 +2374,35 @@
               fr.readAsDataURL(f);
             });
           });
+      }
+      // Сворачивает модалку добавления скамейки и позволяет пользователю
+      // выбрать точную точку на карте. После клика по карте модалка снова
+      // открывается, а выбранные координаты подставляются в скамейку.
+      function pickPreciseLocation() {
+        var am = document.getElementById("addModal");
+        if (!am || !am.classList.contains("active")) return;
+        am.classList.remove("active");
+        window.__pickingLocation = true;
+        showToast("Выберите точную точку на карте");
+        var pickHandler = function (e) {
+          if (!window.__pickingLocation) {
+            if (myMap) myMap.off("click", pickHandler);
+            return;
+          }
+          var ll = e.latlng;
+          userPosition = { lat: ll.lat, lng: ll.lng };
+          if (myMap) myMap.setView([ll.lat, ll.lng], myMap.getZoom());
+          if (benchPlacemark) benchPlacemark.setLatLng([ll.lat, ll.lng]);
+          var coordsEl = document.getElementById("benchCoords");
+          if (coordsEl)
+            coordsEl.textContent =
+              "Координаты: " + ll.lat.toFixed(5) + ", " + ll.lng.toFixed(5);
+          var reopen = document.getElementById("addModal");
+          if (reopen) reopen.classList.add("active");
+          window.__pickingLocation = false;
+          if (myMap) myMap.off("click", pickHandler);
+        };
+        if (myMap) myMap.once("click", pickHandler);
       }
       // Проверяет размер выбранных файлов (жёсткий лимит — 10 МБ). Совпадает с
       // серверным limits.fileSize, но даёт пользователю мгновенный фидбэк.
@@ -2562,7 +2597,7 @@
           '<div><div style="font-weight:700">' +
           escapeHtml(currentUser.nickname) +
           '</div><div style="color:var(--gray)">@' +
-          escapeHtml(currentUser.login) +
+          escapeHtml(currentUser.username || currentUser.login || "") +
           "</div></div></div>";
         h +=
           '<div style="display:flex;gap:10px;margin-bottom:20px"><div class="profile-stat"><div class="v">' +
@@ -3104,6 +3139,8 @@
       function logout() {
         currentUser = null;
         localStorage.removeItem("tver_user");
+        var statusEl = document.getElementById("authStatus");
+        if (statusEl) statusEl.textContent = "Подключение к Telegram…";
         document.getElementById("authScreen").classList.remove("hidden");
         document.getElementById("mainApp").classList.remove("active");
         closeModal("profileModal");
@@ -3113,6 +3150,8 @@
         var panel = document.getElementById("notificationsPanel");
         if (panel && panel.classList.contains("active"))
           panel.classList.remove("active");
+        // Прозрачная повторная авторизация (без форм входа)
+        checkAuth();
       }
       var initialViewportHeight = window.innerHeight;
       window.addEventListener("resize", function () {

@@ -12,6 +12,7 @@ const fs = require("fs");
 const multer = require("multer");
 const crypto = require("crypto");
 const os = require("os");
+const jwt = require("jsonwebtoken");
 
 // ---- Configuration --------------------------------------------------------
 const app = express();
@@ -22,13 +23,27 @@ const D1_ACCOUNT_ID = process.env.D1_ACCOUNT_ID;
 const D1_DATABASE_ID = process.env.D1_DATABASE_ID;
 const D1_API_TOKEN = process.env.D1_API_TOKEN;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const JWT_SECRET = process.env.JWT_SECRET;
+if (!JWT_SECRET) {
+  // В продакшене JWT_SECRET обязателен. Для локальной разработки генерируем
+  // случайный ключ (токены будут недействительны после перезапуска сервера).
+  console.warn(
+    " WARNING: JWT_SECRET не задан — сгенерирован временный ключ. " +
+      "Установите JWT_SECRET в переменных окружения для продакшена.",
+  );
+}
+const jwtSecret = JWT_SECRET || crypto.randomBytes(32).toString("hex");
+
+// Время жизни JWT-токена (30 дней).
+const JWT_TTL = "30d";
+// Максимальный возраст auth_date из initData Telegram (24 часа).
+const TG_AUTH_DATE_MAX_AGE = 24 * 60 * 60;
 
 // Reliability tuning
 const D1_RETRIES = 3; // retry attempts on transient failures
 const D1_RETRY_DELAY = 300; // base backoff (ms), exponential
 const D1_TIMEOUT = 10000; // per-request fetch timeout (ms)
 const CACHE_TTL = 30000; // stats / top-users cache TTL (ms)
-const SESSION_CACHE_TTL = 300000; // in-memory session cache (ms)
 
 if (!D1_ACCOUNT_ID || !D1_DATABASE_ID || !D1_API_TOKEN) {
   console.error(" Missing required D1 environment variables:");
@@ -172,37 +187,7 @@ function setCache(key, v) {
   responseCache.set(key, { v, t: Date.now() });
 }
 
-const sessionCache = new Map(); // token -> { userId, expiresAt, cachedAt }
 
-async function getSessionUser(token) {
-  const cached = sessionCache.get(token);
-  if (
-    cached &&
-    cached.expiresAt > Date.now() &&
-    Date.now() - cached.cachedAt < SESSION_CACHE_TTL
-  ) {
-    return cached.userId;
-  }
-  const rows = await q(
-    "SELECT user_id, expires_at FROM sessions WHERE token=?",
-    [token],
-  );
-  if (!rows.length) {
-    sessionCache.delete(token);
-    return null;
-  }
-  if (rows[0].expires_at && Date.now() > rows[0].expires_at) {
-    await run("DELETE FROM sessions WHERE token=?", [token]).catch(() => {});
-    sessionCache.delete(token);
-    return null;
-  }
-  sessionCache.set(token, {
-    userId: rows[0].user_id,
-    expiresAt: rows[0].expires_at,
-    cachedAt: Date.now(),
-  });
-  return rows[0].user_id;
-}
 
 // ============================================================================
 //  Batch helpers (eliminate N+1 API calls)
@@ -292,23 +277,19 @@ function checkRateLimit(key) {
 }
 
 // ============================================================================
-//  Password hashing
+//  JWT helpers (вместо сессионной/парольной авторизации)
 // ============================================================================
-const SESSION_DURATION = 7 * 24 * 60 * 60 * 1000;
-
-function hashPassword(password) {
-  const salt = crypto.randomBytes(16).toString("hex");
-  const hash = crypto.scryptSync(password, salt, 64).toString("hex");
-  return `${salt}:${hash}`;
+function signToken(userId) {
+  return jwt.sign({ userId }, jwtSecret, { expiresIn: JWT_TTL });
 }
 
-function verifyPassword(password, stored) {
-  if (!stored) return false;
-  const parts = stored.split(":");
-  if (parts.length !== 2) return password === stored;
-  const [salt, hash] = parts;
-  const testHash = crypto.scryptSync(password, salt, 64).toString("hex");
-  return testHash === hash;
+function verifyToken(token) {
+  try {
+    const payload = jwt.verify(token, jwtSecret);
+    return payload && payload.userId ? payload.userId : null;
+  } catch (e) {
+    return null;
+  }
 }
 
 // ============================================================================
@@ -320,18 +301,14 @@ function requireAuth(req, res, next) {
   else token = (req.body && req.body.token) || req.query.token || "";
 
   if (!token)
-    return res.json({ success: false, error: "Требуется авторизация" });
+    return res.status(401).json({ success: false, error: "Требуется авторизация" });
 
-  getSessionUser(token)
-    .then((uid) => {
-      if (!uid) return res.json({ success: false, error: "Сессия истекла" });
-      req.user_id = uid;
-      next();
-    })
-    .catch((err) => {
-      console.error("Ошибка аутентификации:", err.message);
-      res.json({ success: false, error: "Ошибка сервера" });
-    });
+  const uid = verifyToken(token);
+  if (!uid)
+    return res.status(401).json({ success: false, error: "Токен недействителен" });
+
+  req.user_id = uid;
+  next();
 }
 
 function requireAdmin(req, res, next) {
@@ -341,23 +318,40 @@ function requireAdmin(req, res, next) {
         req.user_id,
       ]);
       if (!user.length || !user[0].is_admin) {
-        return res.json({ success: false, error: "Доступ запрещён" });
+        return res.status(403).json({ success: false, error: "Доступ запрещён" });
       }
       next();
     } catch (err) {
       console.error("Ошибка проверки админа:", err.message);
-      res.json({ success: false, error: "Ошибка сервера" });
+      res.status(500).json({ success: false, error: "Ошибка сервера" });
     }
   });
 }
 
-function verifyTelegramAuth(initData) {
-  if (!initData || !TELEGRAM_BOT_TOKEN) return null;
+// Проверяет подпись Telegram WebApp initData по алгоритму:
+//   secret_key = HMAC-SHA256("WebAppData", bot_token)
+//   hash       = HMAC-SHA256(secret_key, data_check_string)
+// где data_check_string — отсортированные "key=value" через "\n".
+// Также проверяет auth_date (отклоняет старше 24 часов и будущие значения).
+// Возвращает объект пользователя из initData или null при ошибке.
+function verifyTelegramInitData(initData, botToken) {
+  if (!initData || !botToken) return null;
 
   try {
-    const url = new URL(initData, "http://localhost");
+    // Telegram initData — это строка вида "query_id=...&user=...&hash=..."
+    // без ведущего '?'. new URL иначе трактует её как путь, поэтому нормализуем.
+    const normalized = initData.startsWith("?") ? initData : "?" + initData;
+    const url = new URL(normalized, "http://localhost");
     const hash = url.searchParams.get("hash");
     if (!hash) return null;
+
+    // Проверка auth_date
+    const authDateRaw = url.searchParams.get("auth_date");
+    if (!authDateRaw) return null;
+    const authDate = parseInt(authDateRaw, 10);
+    const now = Math.floor(Date.now() / 1000);
+    if (isNaN(authDate) || now - authDate > TG_AUTH_DATE_MAX_AGE || authDate > now + 60)
+      return null;
 
     url.searchParams.delete("hash");
 
@@ -369,7 +363,7 @@ function verifyTelegramAuth(initData) {
 
     const secretKey = crypto
       .createHmac("sha256", "WebAppData")
-      .update(TELEGRAM_BOT_TOKEN)
+      .update(botToken)
       .digest();
 
     const computedHash = crypto
@@ -384,137 +378,111 @@ function verifyTelegramAuth(initData) {
 
     return JSON.parse(userParam);
   } catch (e) {
-    console.error("Ошибка проверки Telegram auth:", e.message);
+    console.error("Ошибка проверки Telegram initData:", e.message);
     return null;
   }
 }
 
-app.post("/api/telegram-login", async (req, res) => {
-  const initData = req.body.initData;
-  const tgUser = verifyTelegramAuth(initData);
+
+// Создаёт пользователя по telegram_id или обновляет его данные
+// (first_name/last_name/username/photo_url могли измениться в Telegram).
+async function upsertTelegramUser(tgUser) {
+  const telegramId = String(tgUser.id);
+  const username = tgUser.username || null;
+  const firstName = tgUser.first_name || "";
+  const lastName = tgUser.last_name || "";
+  const photoUrl = tgUser.photo_url || null;
+
+  const existing = await q("SELECT * FROM users WHERE telegram_id=?", [
+    telegramId,
+  ]);
+
+  if (!existing.length) {
+    const login = ("tg_" + telegramId).substring(0, 50);
+    const nickname = (firstName || username || "Пользователь").substring(0, 100);
+    await run(
+      "INSERT INTO users(telegram_id, login, nickname, first_name, last_name, username, photo_url) VALUES (?,?,?,?,?,?,?)",
+      [telegramId, login, nickname, firstName, lastName, username, photoUrl],
+    );
+    return (await q("SELECT * FROM users WHERE telegram_id=?", [telegramId]))[0];
+  }
+
+  const user = existing[0];
+  await run(
+    "UPDATE users SET first_name=?, last_name=?, username=?, photo_url=? WHERE id=?",
+    [firstName, lastName, username, photoUrl, user.id],
+  );
+  return Object.assign({}, user, {
+    first_name: firstName,
+    last_name: lastName,
+    username: username,
+    photo_url: photoUrl,
+  });
+}
+
+// Безопасное представление пользователя для клиента.
+function publicUser(user) {
+  return {
+    id: user.id,
+    nickname: user.nickname,
+    first_name: user.first_name || "",
+    last_name: user.last_name || "",
+    username: user.username || "",
+    photo_url: user.photo_url || "",
+    is_admin: user.is_admin,
+    theme: user.theme || "dark",
+    avatar: user.avatar || "",
+  };
+}
+
+// POST /api/auth/telegram — прозрачная авторизация через Telegram WebApp.
+app.post("/api/auth/telegram", async (req, res) => {
+  const initData = req.body && req.body.initData;
+  const tgUser = verifyTelegramInitData(initData, TELEGRAM_BOT_TOKEN);
 
   if (!tgUser) {
-    return res.json({ success: false, error: "Неверные данные Telegram" });
+    return res
+      .status(401)
+      .json({ success: false, error: "Неверные данные Telegram" });
   }
 
   try {
-    const telegramId = String(tgUser.id);
-    const username = tgUser.username || "";
-    const firstName = tgUser.first_name || "";
-    const lastName = tgUser.last_name || "";
-
-    let users = await q("SELECT * FROM users WHERE telegram_id=?", [
-      telegramId,
-    ]);
-
-    if (!users.length) {
-      const login = (username || `tg_${telegramId}`).substring(0, 50);
-      const nickname = (firstName || username || "Пользователь").substring(
-        0,
-        100,
-      );
-
-      await run(
-        "INSERT INTO users(telegram_id, login, nickname, first_name, last_name) VALUES (?,?,?,?,?)",
-        [telegramId, login, nickname, firstName, lastName],
-      );
-
-      const newUsers = await q("SELECT * FROM users WHERE telegram_id=?", [
-        telegramId,
-      ]);
-      const user = newUsers[0];
-      const token = crypto.randomBytes(32).toString("hex");
-      const expiresAt = Date.now() + SESSION_DURATION;
-      await run(
-        "INSERT INTO sessions(user_id,token,expires_at) VALUES (?,?,?)",
-        [user.id, token, expiresAt],
-      );
-
-      return res.json({
-        success: true,
-        user: { id: user.id, nickname: user.nickname, is_admin: user.is_admin },
-        token,
-      });
-    } else {
-      const user = users[0];
-      const token = crypto.randomBytes(32).toString("hex");
-      const expiresAt = Date.now() + SESSION_DURATION;
-      await run(
-        "INSERT INTO sessions(user_id,token,expires_at) VALUES (?,?,?)",
-        [user.id, token, expiresAt],
-      );
-
-      return res.json({
-        success: true,
-        user: { id: user.id, nickname: user.nickname, is_admin: user.is_admin },
-        token,
-      });
-    }
+    const user = await upsertTelegramUser(tgUser);
+    const token = signToken(user.id);
+    res.json({ success: true, token, user: publicUser(user) });
   } catch (err) {
     console.error("Ошибка Telegram входа:", err.message);
-    res.json({ success: false, error: "Ошибка сервера" });
+    res.status(500).json({ success: false, error: "Ошибка сервера" });
   }
 });
 
 const isDev =
   process.env.NODE_ENV !== "production" || process.env.DEV_MODE === "true";
 
+// Dev-only: вход без Telegram (например, при локальной отладке в браузере).
 if (isDev) {
-  app.post("/api/dev-login", async (req, res) => {
+  app.post("/api/auth/dev-login", async (req, res) => {
     try {
       const telegramId = "dev";
-      let users = await q("SELECT * FROM users WHERE telegram_id=?", [
+      let user = (await q("SELECT * FROM users WHERE telegram_id=?", [
         telegramId,
-      ]);
+      ]))[0];
 
-      if (!users.length) {
+      if (!user) {
         await run(
           "INSERT INTO users(telegram_id, login, nickname) VALUES (?,?,?)",
           [telegramId, "dev", "Dev User"],
         );
-
-        const newUsers = await q("SELECT * FROM users WHERE telegram_id=?", [
+        user = (await q("SELECT * FROM users WHERE telegram_id=?", [
           telegramId,
-        ]);
-        const user = newUsers[0];
-        const token = crypto.randomBytes(32).toString("hex");
-        const expiresAt = Date.now() + SESSION_DURATION;
-        await run(
-          "INSERT INTO sessions(user_id,token,expires_at) VALUES (?,?,?)",
-          [user.id, token, expiresAt],
-        );
-
-        return res.json({
-          success: true,
-          user: {
-            id: user.id,
-            nickname: user.nickname,
-            is_admin: user.is_admin,
-          },
-          token,
-        });
-      } else {
-        const user = users[0];
-        const token = crypto.randomBytes(32).toString("hex");
-        const expiresAt = Date.now() + SESSION_DURATION;
-        await run(
-          "INSERT INTO sessions(user_id,token,expires_at) VALUES (?,?,?)",
-          [user.id, token, expiresAt],
-        );
-
-        return res.json({
-          success: true,
-          user: {
-            id: user.id,
-            nickname: user.nickname,
-            is_admin: user.is_admin,
-          },
-          token,
-        });
+        ]))[0];
       }
+
+      const token = signToken(user.id);
+      res.json({ success: true, token, user: publicUser(user) });
     } catch (err) {
       console.error("Ошибка dev входа:", err.message);
-      res.json({ success: false, error: "Ошибка сервера" });
+      res.status(500).json({ success: false, error: "Ошибка сервера" });
     }
   });
 }
@@ -625,9 +593,6 @@ async function initDatabase() {
     `CREATE TABLE IF NOT EXISTS bench_likes (
       id INTEGER PRIMARY KEY AUTOINCREMENT, bench_id INTEGER, user_id INTEGER,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP, UNIQUE(bench_id, user_id) )`,
-    `CREATE TABLE IF NOT EXISTS sessions (
-      id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, token TEXT UNIQUE,
-      expires_at INTEGER, created_at DATETIME DEFAULT CURRENT_TIMESTAMP )`,
     `CREATE TABLE IF NOT EXISTS notifications (
       id INTEGER PRIMARY KEY AUTOINCREMENT, user_id INTEGER, message TEXT,
       type TEXT DEFAULT 'info', read INTEGER DEFAULT 0,
@@ -673,6 +638,19 @@ async function initDatabase() {
     );
     console.log("Добавлена колонка telegram_id в users");
   }
+  // Колонки профиля Telegram (если их ещё нет)
+  const telegramCols = {
+    first_name: `ALTER TABLE users ADD COLUMN first_name TEXT DEFAULT NULL`,
+    last_name: `ALTER TABLE users ADD COLUMN last_name TEXT DEFAULT NULL`,
+    username: `ALTER TABLE users ADD COLUMN username TEXT DEFAULT NULL`,
+    photo_url: `ALTER TABLE users ADD COLUMN photo_url TEXT DEFAULT NULL`,
+  };
+  for (const [col, sql] of Object.entries(telegramCols)) {
+    if (!ucols.some((c) => c.name === col)) {
+      await run(sql);
+      console.log(`Добавлена колонка ${col} в users`);
+    }
+  }
 }
 
 // ============================================================================
@@ -716,76 +694,10 @@ async function createUserNotice(userId, message, type, relatedId) {
 //  API Endpoints
 // ============================================================================
 
-// POST /api/register
-app.post("/api/register", async (req, res) => {
-  const ip = req.ip || req.socket.remoteAddress || "unknown";
-  if (!checkRateLimit("register:" + ip))
-    return res.json({
-      success: false,
-      error: "Слишком много попыток. Подождите минуту.",
-    });
-
-  const l = req.body.login,
-    n = req.body.nickname,
-    p = req.body.password;
-  if (!l || !p || !n)
-    return res.json({ success: false, error: "Все поля обязательны" });
-
-  try {
-    if ((await q("SELECT id FROM users WHERE login=?", [l])).length)
-      return res.json({ success: false, error: "Логин занят" });
-    if ((await q("SELECT id FROM users WHERE nickname=?", [n])).length)
-      return res.json({ success: false, error: "Никнейм занят" });
-
-    await run("INSERT INTO users(login,password,nickname) VALUES (?,?,?)", [
-      l,
-      hashPassword(p),
-      n,
-    ]);
-    res.json({ success: true });
-  } catch (err) {
-    console.error("Ошибка регистрации:", err.message);
-    res.json({ success: false, error: "Ошибка сервера" });
-  }
-});
-
-// POST /api/login
-app.post("/api/login", async (req, res) => {
-  const ip = req.ip || req.socket.remoteAddress || "unknown";
-  if (!checkRateLimit("login:" + ip))
-    return res.json({
-      success: false,
-      error: "Слишком много попыток. Подождите минуту.",
-    });
-
-  const l = req.body.login,
-    p = req.body.password;
-  try {
-    const users = await q(
-      "SELECT id,login,nickname,reputation,total_benches,theme,avatar,password FROM users WHERE login=?",
-      [l],
-    );
-    let loginOk = false;
-    if (users.length && verifyPassword(p, users[0].password)) {
-      loginOk = true;
-      delete users[0].password;
-    }
-    if (loginOk) {
-      const token = crypto.randomBytes(32).toString("hex");
-      const expiresAt = Date.now() + SESSION_DURATION;
-      await run(
-        "INSERT INTO sessions(user_id,token,expires_at) VALUES (?,?,?)",
-        [users[0].id, token, expiresAt],
-      );
-      res.json({ success: true, user: users[0], token });
-    } else {
-      res.json({ success: false, error: "Неверные данные" });
-    }
-  } catch (err) {
-    console.error("Ошибка входа:", err.message);
-    res.json({ success: false, error: "Ошибка сервера" });
-  }
-});
+// Парольная регистрация/вход (/api/register, /api/login) удалены:
+// аутентификация теперь только через Telegram WebApp (см. /api/auth/telegram).
+// Поля login/password в таблице users оставлены для обратной совместимости,
+// но больше не используются.
 
 // POST /api/user/avatar
 app.post(
@@ -845,10 +757,7 @@ app.get("/api/me", requireAuth, async (req, res) => {
       [req.user_id],
     );
     if (!user.length) {
-      // Пользователь удалён — сессия больше не действительна
-      await run("DELETE FROM sessions WHERE user_id=?", [req.user_id]).catch(
-        () => {},
-      );
+      // Пользователь удалён — токен больше не действителен
       return res.json({ success: false, error: "Пользователь не найден" });
     }
     res.json({ success: true, user: user[0] });

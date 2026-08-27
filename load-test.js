@@ -30,16 +30,15 @@ function request(method, path, body, token) {
 }
 
 async function registerUser(i) {
-  const r = await request("POST", "/api/register", {
-    login: "loaduser_" + i,
-    nickname: "LoadUser" + i,
-    password: "pass123",
-  });
-  return JSON.parse(r.body);
+  // Парольная регистрация удалена: авторизация только через Telegram.
+  // Для нагрузочного теста используем dev-логин (работает в DEV_MODE/не-production).
+  const r = await request("POST", "/api/auth/dev-login", {});
+  const d = JSON.parse(r.body);
+  return { success: d.success, token: d.token, user: d.user };
 }
 
-async function loginUser(login) {
-  const r = await request("POST", "/api/login", { login, password: "pass123" });
+async function loginUser() {
+  const r = await request("POST", "/api/auth/dev-login", {});
   return JSON.parse(r.body);
 }
 
