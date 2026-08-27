@@ -438,6 +438,26 @@
         localStorage.removeItem("admin_user_id");
         location.reload();
       }
+      // Telegram может передать initData чуть позже после загрузки страницы,
+      // поэтому ждём его появления с небольшими паузами.
+      function waitForInitData(maxAttempts, delayMs) {
+        maxAttempts = maxAttempts || 15;
+        delayMs = delayMs || 150;
+        return new Promise(function (resolve) {
+          var attempts = 0;
+          (function check() {
+            var initData =
+              (window.Telegram &&
+                window.Telegram.WebApp &&
+                window.Telegram.WebApp.initData) ||
+              "";
+            if (initData) return resolve(initData);
+            attempts++;
+            if (attempts >= maxAttempts) return resolve("");
+            setTimeout(check, delayMs);
+          })();
+        });
+      }
       async function checkAuth() {
         // 1) Токен, переданный из личного кабинета (открыли админку по ссылке)
         var urlToken = null;
@@ -474,12 +494,9 @@
           adminUserId = uid;
           if (await tryAdminAccess()) return;
         }
-        // 4) Прозрачная авторизация через Telegram WebApp (если открыто внутри Telegram)
-        var initData =
-          (window.Telegram &&
-            window.Telegram.WebApp &&
-            window.Telegram.WebApp.initData) ||
-          "";
+        // 4) Прозрачная авторизация через Telegram WebApp (панель открыта как WebApp).
+        // initData появляется не мгновенно — ждём его.
+        var initData = await waitForInitData();
         if (initData) {
           try {
             var res = await fetch("/api/auth/telegram", {
@@ -493,6 +510,12 @@
               adminUserId = data.user.id;
               if (data.user.is_admin) {
                 if (await tryAdminAccess()) return;
+              } else {
+                var stNo = document.getElementById("adminAuthStatus");
+                if (stNo)
+                  stNo.innerHTML =
+                    '<i class="fa-solid fa-triangle-exclamation" style="color:var(--red)"></i> Недостаточно прав: вы не администратор.';
+                return;
               }
             }
           } catch (e) {}
@@ -501,7 +524,7 @@
         var st = document.getElementById("adminAuthStatus");
         if (st)
           st.innerHTML =
-            '<i class="fa-solid fa-triangle-exclamation" style="color:var(--red)"></i> Нет доступа к админке. Откройте её через основное приложение (нужны права администратора).';
+            '<i class="fa-solid fa-triangle-exclamation" style="color:var(--red)"></i> Нет доступа к админке. Откройте её через Telegram (кнопка бота «Открыть админку»).';
       }
       function loadAll() {
         loadStats();
@@ -683,15 +706,9 @@
               '<div style="display:flex;flex-wrap:wrap;gap:10px">' +
               ph +
               "</div>" +
-              (bench.moderated === 1 ||
-              bench.status === "approved" ||
-              bench.published === 1
-                ? '<button class="btn-sm btn-edit" style="margin-top:15px" onclick="openAdminCommentModal(' +
-                  bench.id +
-                  ')"> Комментарий админа</button>'
-                : '<button class="btn-sm btn-edit" style="margin-top:15px" onclick="openAdminCommentModal(' +
-                  bench.id +
-                  ')"> Комментарий админа</button>') +
+              '<button class="btn-sm btn-edit" style="margin-top:15px" onclick="openAdminCommentModal(' +
+                bench.id +
+                ')"> Комментарий админа</button>' +
               "</div>";
             document.body.appendChild(modal);
           });
@@ -1352,9 +1369,12 @@
         document.getElementById("photoViewer").classList.remove("active");
       }
       var adminMap = null;
+      var adminMapInitAttempts = 0;
+      var ADMIN_MAP_MAX_ATTEMPTS = 40;
       function initAdminMap() {
+        adminMapInitAttempts++;
         if (typeof ymaps === "undefined") {
-          setTimeout(initAdminMap, 500);
+          if (adminMapInitAttempts < ADMIN_MAP_MAX_ATTEMPTS) setTimeout(initAdminMap, 500);
           return;
         }
         if (typeof ymaps !== "undefined" && typeof ymaps.Map !== "undefined") {
@@ -1367,7 +1387,7 @@
             });
           });
         } else {
-          setTimeout(initAdminMap, 500);
+          if (adminMapInitAttempts < ADMIN_MAP_MAX_ATTEMPTS) setTimeout(initAdminMap, 500);
         }
       }
       ymaps &&

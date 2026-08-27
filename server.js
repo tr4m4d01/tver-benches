@@ -357,16 +357,14 @@ function verifyTelegramInitData(initData, botToken) {
     const hash = url.searchParams.get("hash");
     if (!hash) return null;
 
-    // Проверка auth_date
+    // Проверка auth_date (отклоняем только слишком старые значения;
+    // небольшое расхождение часов Telegram/client допустимо — подпись
+    // всё равно проверяется по bot_token, подделать auth_date нельзя)
     const authDateRaw = url.searchParams.get("auth_date");
     if (!authDateRaw) return null;
     const authDate = parseInt(authDateRaw, 10);
     const now = Math.floor(Date.now() / 1000);
-    if (
-      isNaN(authDate) ||
-      now - authDate > TG_AUTH_DATE_MAX_AGE ||
-      authDate > now + 60
-    ) {
+    if (isNaN(authDate) || now - authDate > TG_AUTH_DATE_MAX_AGE) {
       return null;
     }
 
@@ -458,6 +456,11 @@ function publicUser(user) {
 
 // POST /api/auth/telegram — прозрачная авторизация через Telegram WebApp.
 app.post("/api/auth/telegram", async (req, res) => {
+  if (!checkRateLimit("auth:telegram:" + (req.ip || "unknown"))) {
+    return res
+      .status(429)
+      .json({ success: false, error: "Слишком много попыток, попробуйте позже" });
+  }
   const initData = req.body && req.body.initData;
   const tgUser = verifyTelegramInitData(initData, TELEGRAM_BOT_TOKEN);
 
@@ -483,6 +486,11 @@ const isDev =
 // Dev-only: вход без Telegram (например, при локальной отладке в браузере).
 if (isDev) {
   app.post("/api/auth/dev-login", async (req, res) => {
+    if (!checkRateLimit("auth:dev:" + (req.ip || "unknown"))) {
+      return res
+        .status(429)
+        .json({ success: false, error: "Слишком много попыток, попробуйте позже" });
+    }
     try {
       const telegramId = "dev";
       let user = (
@@ -512,9 +520,14 @@ if (isDev) {
 //  Express middleware
 // ============================================================================
 app.use("/uploads", express.static(__dirname + "/uploads"));
-app.use(express.static(__dirname + "/public"));
 
-app.get("/admin", (req, res) => {
+// Точечная отдача файлов вместо широкого express.static("/public"):
+// так /admin защищён на уровне Express (requireAdmin), а не только на уровне API.
+app.get("/", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+
+app.get("/admin", requireAdmin, (req, res) => {
   res.sendFile(path.join(__dirname, "private", "admin.html"));
 });
 
@@ -675,22 +688,10 @@ async function initDatabase() {
 // ============================================================================
 async function createNotification(userId, message, type, relatedId = null) {
   try {
-    if (type === "admin") {
-      await run(
-        "INSERT INTO notifications(user_id, message, type, related_id) VALUES (NULL, ?, ?, ?)",
-        [message, type || "info", relatedId],
-      );
-    } else if (userId) {
-      await run(
-        "INSERT INTO notifications(user_id, message, type, related_id) VALUES (?, ?, ?, ?)",
-        [userId, message, type || "info", relatedId],
-      );
-    } else {
-      await run(
-        "INSERT INTO notifications(message, type, related_id) VALUES (?, ?, ?)",
-        [message, type || "info", relatedId],
-      );
-    }
+    await run(
+      "INSERT INTO notifications(user_id, message, type, related_id) VALUES (?, ?, ?, ?)",
+      [type === "admin" ? null : userId || null, message, type || "info", relatedId],
+    );
   } catch (err) {
     console.error("Ошибка создания уведомления:", err.message);
   }

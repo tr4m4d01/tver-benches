@@ -13,10 +13,20 @@ bot.onText(/\/start/, (msg) => {
 
   const keyboard = {
     reply_markup: {
-      keyboard: [
-        [{ text: "Открыть карту скамеек", web_app: { url: MINI_APP_URL } }],
+      inline_keyboard: [
+        [
+          {
+            text: "Открыть карту скамеек",
+            web_app: { url: MINI_APP_URL },
+          },
+        ],
+        [
+          {
+            text: "Открыть админку",
+            web_app: { url: MINI_APP_URL + "/admin" },
+          },
+        ],
       ],
-      resize_keyboard: true,
     },
   };
 
