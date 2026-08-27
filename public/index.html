@@ -2617,6 +2617,18 @@
             renderProfile();
           });
       }
+      function openAdminPanel() {
+        if (!currentUser || !currentUser.is_admin) {
+          showToast("Нет доступа");
+          return;
+        }
+        // Передаём JWT в URL, чтобы админ-панель (отдельная страница) могла
+        // авторизоваться даже если localStorage не разделяется между WebView.
+        window.open(
+          "/admin?token=" + encodeURIComponent(currentUser.token),
+          "_blank",
+        );
+      }
       function renderProfile() {
         var h =
           '<div style="display:flex;align-items:center;gap:15px;margin-bottom:20px">' +
@@ -2663,6 +2675,11 @@
           '<div class="section-title">Отзывы</div><div id="myReviewsBox">Загрузка...</div>';
         h +=
           '<div class="section-title">Жалобы</div><div id="myReportsBox" style="max-height:200px;overflow-y:auto;-webkit-overflow-scrolling:touch">Загрузка...</div>';
+        if (currentUser.is_admin) {
+          h +=
+            '<div class="section-title">Администрирование</div>' +
+            '<button class="btn" style="margin-bottom:15px;background:rgba(108,139,140,0.15);color:var(--primary);border-color:rgba(108,139,140,0.35)" onclick="openAdminPanel()">Открыть админку</button>';
+        }
         h +=
           '<button class="btn" style="margin-top:15px;background:rgba(196,92,92,0.15);color:var(--red);border-color:rgba(196,92,92,0.35)" onclick="logout()">Выйти</button>';
         document.getElementById("profileContent").innerHTML = h;

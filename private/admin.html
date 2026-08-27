@@ -25,6 +25,10 @@
         document.head.appendChild(s);
       })();
     </script>
+    <script
+      src="https://telegram.org/js/telegram-web-app.js"
+      defer
+    ></script>
     <style>
       :root {
         --primary: #6c8b8c;
@@ -317,13 +321,9 @@
     <div id="loginScreen">
       <div class="login-card">
         <h2><i class="fa-solid fa-lock"></i> Админ-панель</h2>
-        <div class="form-group">
-          <label>Логин</label><input type="text" id="adminLogin" />
-        </div>
-        <div class="form-group">
-          <label>Пароль</label><input type="password" id="adminPassword" />
-        </div>
-        <button class="btn" onclick="login()">Войти</button>
+        <p id="adminAuthStatus" style="color: var(--gray); text-align: center">
+          <i class="fa-solid fa-spinner fa-spin"></i> Авторизация через Telegram…
+        </p>
       </div>
     </div>
     <div id="adminPanel">
@@ -378,6 +378,10 @@
     <script>
       var adminToken = null;
       var adminUserId = null;
+      if (window.Telegram && window.Telegram.WebApp) {
+        window.Telegram.WebApp.ready();
+        window.Telegram.WebApp.expand();
+      }
       function escapeHtml(text) {
         if (text === null || text === undefined) return "";
         var div = document.createElement("div");
@@ -404,22 +408,16 @@
           toast.remove();
         }, 3000);
       }
-      async function login() {
-        var l = document.getElementById("adminLogin").value.trim();
-        var p = document.getElementById("adminPassword").value;
+      function enterAdminPanel() {
+        document.getElementById("loginScreen").style.display = "none";
+        document.getElementById("adminPanel").style.display = "block";
+        initAdminMap();
+        loadAll();
+      }
+      // Проверяет, что текущий adminToken даёт доступ к админке (JWT + is_admin
+      // проверяются на сервере в requireAdmin). При успехе сохраняет токен и входит.
+      async function tryAdminAccess() {
         try {
-          var res = await fetch("/api/login", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ login: l, password: p }),
-          });
-          var data = await res.json();
-          if (!data.success) {
-            alert("Неверные данные");
-            return;
-          }
-          adminToken = data.token;
-          adminUserId = data.user.id;
           var adminRes = await fetch("/api/admin/benches", {
             headers: adminHeaders(),
           });
@@ -427,19 +425,11 @@
           if (adminData.success) {
             localStorage.setItem("admin_token", adminToken);
             localStorage.setItem("admin_user_id", adminUserId);
-            document.getElementById("loginScreen").style.display = "none";
-            document.getElementById("adminPanel").style.display = "block";
-            initAdminMap();
-            loadAll();
-          } else {
-            alert(
-              "Нет доступа к админке: " +
-                (adminData.error || "недостаточно прав"),
-            );
+            enterAdminPanel();
+            return true;
           }
-        } catch (e) {
-          alert("Ошибка соединения");
-        }
+        } catch (e) {}
+        return false;
       }
       function logout() {
         adminToken = null;
@@ -449,28 +439,69 @@
         location.reload();
       }
       async function checkAuth() {
+        // 1) Токен, переданный из личного кабинета (открыли админку по ссылке)
+        var urlToken = null;
+        try {
+          urlToken = new URLSearchParams(location.search).get("token");
+        } catch (e) {}
+        if (urlToken) {
+          adminToken = urlToken;
+          if (await tryAdminAccess()) {
+            try {
+              var me = await (
+                await fetch("/api/me", { headers: adminHeaders() })
+              ).json();
+              if (me.success && me.user) adminUserId = me.user.id;
+            } catch (e) {}
+            return;
+          }
+        }
+        // 2) JWT, сохранённый главным Mini App (общий localStorage, тот же origin)
+        var mainUser = null;
+        try {
+          mainUser = JSON.parse(localStorage.getItem("tver_user") || "null");
+        } catch (e) {}
+        if (mainUser && mainUser.token) {
+          adminToken = mainUser.token;
+          adminUserId = mainUser.id;
+          if (await tryAdminAccess()) return;
+        }
+        // 3) Legacy admin_token
         var token = localStorage.getItem("admin_token");
         var uid = localStorage.getItem("admin_user_id");
         if (token && uid) {
           adminToken = token;
           adminUserId = uid;
-          try {
-            var adminRes = await fetch("/api/admin/benches", {
-              headers: adminHeaders(),
-            });
-            var adminData = await adminRes.json();
-            if (adminData.success) {
-              document.getElementById("loginScreen").style.display = "none";
-              document.getElementById("adminPanel").style.display = "block";
-              initAdminMap();
-              loadAll();
-            } else {
-              logout();
-            }
-          } catch (e) {
-            logout();
-          }
+          if (await tryAdminAccess()) return;
         }
+        // 4) Прозрачная авторизация через Telegram WebApp (если открыто внутри Telegram)
+        var initData =
+          (window.Telegram &&
+            window.Telegram.WebApp &&
+            window.Telegram.WebApp.initData) ||
+          "";
+        if (initData) {
+          try {
+            var res = await fetch("/api/auth/telegram", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ initData: initData }),
+            });
+            var data = await res.json();
+            if (data.success && data.token) {
+              adminToken = data.token;
+              adminUserId = data.user.id;
+              if (data.user.is_admin) {
+                if (await tryAdminAccess()) return;
+              }
+            }
+          } catch (e) {}
+        }
+        // Нет доступа
+        var st = document.getElementById("adminAuthStatus");
+        if (st)
+          st.innerHTML =
+            '<i class="fa-solid fa-triangle-exclamation" style="color:var(--red)"></i> Нет доступа к админке. Откройте её через основное приложение (нужны права администратора).';
       }
       function loadAll() {
         loadStats();
