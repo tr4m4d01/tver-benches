@@ -18,6 +18,14 @@ const jwt = require("jsonwebtoken");
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// CORS + body parsing ДОЛЖНЫ быть зарегистрированы до определения маршрутов,
+// иначе req.body будет пустым у роутов, объявленных выше (например,
+// /api/auth/telegram), и авторизация упадёт с 401.
+const CORS_ORIGIN =
+  process.env.CORS_ORIGIN || "https://tver-benches.onrender.com";
+app.use(cors({ origin: CORS_ORIGIN }));
+app.use(express.json({ limit: "50mb" }));
+
 // Cloudflare D1 configuration (from environment variables)
 const D1_ACCOUNT_ID = process.env.D1_ACCOUNT_ID;
 const D1_DATABASE_ID = process.env.D1_DATABASE_ID;
@@ -339,26 +347,7 @@ function requireAdmin(req, res, next) {
 // Также проверяет auth_date (отклоняет старше 24 часов и будущие значения).
 // Возвращает объект пользователя из initData или null при ошибке.
 function verifyTelegramInitData(initData, botToken) {
-  // --- ВРЕМЕННЫЙ ДИАГНОСТИЧЕСКИЙ ЛОГ (удалить после отладки) ---
-  console.log("=== DEBUG verifyTelegramInitData ===");
-  console.log(
-    "initData получен?",
-    !!initData,
-    "длина:",
-    initData ? initData.length : 0,
-  );
-  console.log(
-    "botToken задан?",
-    !!botToken,
-    "начало/конец:",
-    botToken ? botToken.slice(0, 6) + "..." + botToken.slice(-6) : "НЕТ ТОКЕНА",
-  );
-  // --- конец диагностики ---
-
-  if (!initData || !botToken) {
-    console.log("DEBUG: initData или botToken отсутствует — выход");
-    return null;
-  }
+  if (!initData || !botToken) return null;
 
   try {
     // Telegram initData — это строка вида "query_id=...&user=...&hash=..."
@@ -366,36 +355,18 @@ function verifyTelegramInitData(initData, botToken) {
     const normalized = initData.startsWith("?") ? initData : "?" + initData;
     const url = new URL(normalized, "http://localhost");
     const hash = url.searchParams.get("hash");
-    console.log("DEBUG: hash из initData:", hash);
-    if (!hash) {
-      console.log("DEBUG: hash отсутствует в initData — выход");
-      return null;
-    }
+    if (!hash) return null;
 
     // Проверка auth_date
     const authDateRaw = url.searchParams.get("auth_date");
-    if (!authDateRaw) {
-      console.log("DEBUG: auth_date отсутствует — выход");
-      return null;
-    }
+    if (!authDateRaw) return null;
     const authDate = parseInt(authDateRaw, 10);
     const now = Math.floor(Date.now() / 1000);
-    console.log(
-      "DEBUG: auth_date:",
-      authDate,
-      "сейчас:",
-      now,
-      "разница (сек):",
-      now - authDate,
-    );
     if (
       isNaN(authDate) ||
       now - authDate > TG_AUTH_DATE_MAX_AGE ||
       authDate > now + 60
     ) {
-      console.log(
-        "DEBUG: auth_date не прошёл проверку (просрочен или из будущего) — выход",
-      );
       return null;
     }
 
@@ -406,7 +377,6 @@ function verifyTelegramInitData(initData, botToken) {
     );
 
     const dataCheckString = params.map(([k, v]) => `${k}=${v}`).join("\n");
-    console.log("DEBUG: dataCheckString:", JSON.stringify(dataCheckString));
 
     const secretKey = crypto
       .createHmac("sha256", "WebAppData")
@@ -417,10 +387,6 @@ function verifyTelegramInitData(initData, botToken) {
       .createHmac("sha256", secretKey)
       .update(dataCheckString)
       .digest("hex");
-
-    console.log("DEBUG: computedHash:", computedHash);
-    console.log("DEBUG: receivedHash:", hash);
-    console.log("DEBUG: совпадают?", computedHash === hash);
 
     if (computedHash !== hash) return null;
 
@@ -545,10 +511,6 @@ if (isDev) {
 // ============================================================================
 //  Express middleware
 // ============================================================================
-const CORS_ORIGIN =
-  process.env.CORS_ORIGIN || "https://tver-benches.onrender.com";
-app.use(cors({ origin: CORS_ORIGIN }));
-app.use(express.json({ limit: "50mb" }));
 app.use("/uploads", express.static(__dirname + "/uploads"));
 app.use(express.static(__dirname + "/public"));
 

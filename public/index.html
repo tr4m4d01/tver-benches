@@ -1481,16 +1481,6 @@
       // Возвращает Promise<boolean> (успех авторизации).
       function telegramAuth() {
         return waitForInitData().then(function (initData) {
-          // --- ВРЕМЕННЫЙ ДИАГНОСТИЧЕСКИЙ ЛОГ (удалить после отладки) ---
-          console.log("=== DEBUG telegramAuth (frontend) ===");
-          console.log("window.Telegram существует?", !!window.Telegram);
-          console.log(
-            "window.Telegram.WebApp существует?",
-            !!(window.Telegram && window.Telegram.WebApp),
-          );
-          console.log("initData из waitForInitData:", JSON.stringify(initData));
-          console.log("initData длина:", initData ? initData.length : 0);
-          // --- конец диагностики ---
           return new Promise(function (resolve) {
             fetch("/api/auth/telegram", {
               method: "POST",
