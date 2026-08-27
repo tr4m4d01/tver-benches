@@ -187,8 +187,6 @@ function setCache(key, v) {
   responseCache.set(key, { v, t: Date.now() });
 }
 
-
-
 // ============================================================================
 //  Batch helpers (eliminate N+1 API calls)
 // ============================================================================
@@ -301,11 +299,15 @@ function requireAuth(req, res, next) {
   else token = (req.body && req.body.token) || req.query.token || "";
 
   if (!token)
-    return res.status(401).json({ success: false, error: "Требуется авторизация" });
+    return res
+      .status(401)
+      .json({ success: false, error: "Требуется авторизация" });
 
   const uid = verifyToken(token);
   if (!uid)
-    return res.status(401).json({ success: false, error: "Токен недействителен" });
+    return res
+      .status(401)
+      .json({ success: false, error: "Токен недействителен" });
 
   req.user_id = uid;
   next();
@@ -318,7 +320,9 @@ function requireAdmin(req, res, next) {
         req.user_id,
       ]);
       if (!user.length || !user[0].is_admin) {
-        return res.status(403).json({ success: false, error: "Доступ запрещён" });
+        return res
+          .status(403)
+          .json({ success: false, error: "Доступ запрещён" });
       }
       next();
     } catch (err) {
@@ -337,8 +341,18 @@ function requireAdmin(req, res, next) {
 function verifyTelegramInitData(initData, botToken) {
   // --- ВРЕМЕННЫЙ ДИАГНОСТИЧЕСКИЙ ЛОГ (удалить после отладки) ---
   console.log("=== DEBUG verifyTelegramInitData ===");
-  console.log("initData получен?", !!initData, "длина:", initData ? initData.length : 0);
-  console.log("botToken задан?", !!botToken, "начало/конец:", botToken ? botToken.slice(0,6) + "..." + botToken.slice(-6) : "НЕТ ТОКЕНА");
+  console.log(
+    "initData получен?",
+    !!initData,
+    "длина:",
+    initData ? initData.length : 0,
+  );
+  console.log(
+    "botToken задан?",
+    !!botToken,
+    "начало/конец:",
+    botToken ? botToken.slice(0, 6) + "..." + botToken.slice(-6) : "НЕТ ТОКЕНА",
+  );
   // --- конец диагностики ---
 
   if (!initData || !botToken) {
@@ -366,9 +380,22 @@ function verifyTelegramInitData(initData, botToken) {
     }
     const authDate = parseInt(authDateRaw, 10);
     const now = Math.floor(Date.now() / 1000);
-    console.log("DEBUG: auth_date:", authDate, "сейчас:", now, "разница (сек):", now - authDate);
-    if (isNaN(authDate) || now - authDate > TG_AUTH_DATE_MAX_AGE || authDate > now + 60) {
-      console.log("DEBUG: auth_date не прошёл проверку (просрочен или из будущего) — выход");
+    console.log(
+      "DEBUG: auth_date:",
+      authDate,
+      "сейчас:",
+      now,
+      "разница (сек):",
+      now - authDate,
+    );
+    if (
+      isNaN(authDate) ||
+      now - authDate > TG_AUTH_DATE_MAX_AGE ||
+      authDate > now + 60
+    ) {
+      console.log(
+        "DEBUG: auth_date не прошёл проверку (просрочен или из будущего) — выход",
+      );
       return null;
     }
 
@@ -407,7 +434,6 @@ function verifyTelegramInitData(initData, botToken) {
   }
 }
 
-
 // Создаёт пользователя по telegram_id или обновляет его данные
 // (first_name/last_name/username/photo_url могли измениться в Telegram).
 async function upsertTelegramUser(tgUser) {
@@ -423,12 +449,17 @@ async function upsertTelegramUser(tgUser) {
 
   if (!existing.length) {
     const login = ("tg_" + telegramId).substring(0, 50);
-    const nickname = (firstName || username || "Пользователь").substring(0, 100);
+    const nickname = (firstName || username || "Пользователь").substring(
+      0,
+      100,
+    );
     await run(
       "INSERT INTO users(telegram_id, login, nickname, first_name, last_name, username, photo_url) VALUES (?,?,?,?,?,?,?)",
       [telegramId, login, nickname, firstName, lastName, username, photoUrl],
     );
-    return (await q("SELECT * FROM users WHERE telegram_id=?", [telegramId]))[0];
+    return (
+      await q("SELECT * FROM users WHERE telegram_id=?", [telegramId])
+    )[0];
   }
 
   const user = existing[0];
@@ -488,18 +519,18 @@ if (isDev) {
   app.post("/api/auth/dev-login", async (req, res) => {
     try {
       const telegramId = "dev";
-      let user = (await q("SELECT * FROM users WHERE telegram_id=?", [
-        telegramId,
-      ]))[0];
+      let user = (
+        await q("SELECT * FROM users WHERE telegram_id=?", [telegramId])
+      )[0];
 
       if (!user) {
         await run(
           "INSERT INTO users(telegram_id, login, nickname) VALUES (?,?,?)",
           [telegramId, "dev", "Dev User"],
         );
-        user = (await q("SELECT * FROM users WHERE telegram_id=?", [
-          telegramId,
-        ]))[0];
+        user = (
+          await q("SELECT * FROM users WHERE telegram_id=?", [telegramId])
+        )[0];
       }
 
       const token = signToken(user.id);
