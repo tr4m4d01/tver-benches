@@ -16,6 +16,7 @@ const jwt = require("jsonwebtoken");
 
 // ---- Configuration --------------------------------------------------------
 const app = express();
+app.set("trust proxy", 1);
 const PORT = process.env.PORT || 3000;
 
 // CORS + body parsing ДОЛЖНЫ быть зарегистрированы до определения маршрутов,
@@ -459,7 +460,10 @@ app.post("/api/auth/telegram", async (req, res) => {
   if (!checkRateLimit("auth:telegram:" + (req.ip || "unknown"))) {
     return res
       .status(429)
-      .json({ success: false, error: "Слишком много попыток, попробуйте позже" });
+      .json({
+        success: false,
+        error: "Слишком много попыток, попробуйте позже",
+      });
   }
   const initData = req.body && req.body.initData;
   const tgUser = verifyTelegramInitData(initData, TELEGRAM_BOT_TOKEN);
@@ -489,7 +493,10 @@ if (isDev) {
     if (!checkRateLimit("auth:dev:" + (req.ip || "unknown"))) {
       return res
         .status(429)
-        .json({ success: false, error: "Слишком много попыток, попробуйте позже" });
+        .json({
+          success: false,
+          error: "Слишком много попыток, попробуйте позже",
+        });
     }
     try {
       const telegramId = "dev";
@@ -523,11 +530,25 @@ app.use("/uploads", express.static(__dirname + "/uploads"));
 
 // Точечная отдача файлов вместо широкого express.static("/public"):
 // так /admin защищён на уровне Express (requireAdmin), а не только на уровне API.
+function noStore(res) {
+  res.setHeader(
+    "Cache-Control",
+    "no-store, no-cache, must-revalidate, proxy-revalidate",
+  );
+  res.setHeader("Pragma", "no-cache");
+  res.setHeader("Expires", "0");
+}
 app.get("/", (req, res) => {
+  noStore(res);
   res.sendFile(path.join(__dirname, "public", "index.html"));
 });
 
-app.get("/admin", requireAdmin, (req, res) => {
+// /admin отдаёт HTML всем, но реальная защита — на уровне API (requireAdmin на
+// всех /api/admin/*). Это надёжнее для Telegram WebApp, где токен не всегда
+// попадает в URL при навигации: сама админ-панель авторизует пользователя через
+// initData или общий localStorage и покажет «Нет доступа», если прав нет.
+app.get("/admin", (req, res) => {
+  noStore(res);
   res.sendFile(path.join(__dirname, "private", "admin.html"));
 });
 
@@ -690,7 +711,12 @@ async function createNotification(userId, message, type, relatedId = null) {
   try {
     await run(
       "INSERT INTO notifications(user_id, message, type, related_id) VALUES (?, ?, ?, ?)",
-      [type === "admin" ? null : userId || null, message, type || "info", relatedId],
+      [
+        type === "admin" ? null : userId || null,
+        message,
+        type || "info",
+        relatedId,
+      ],
     );
   } catch (err) {
     console.error("Ошибка создания уведомления:", err.message);

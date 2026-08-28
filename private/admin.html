@@ -14,17 +14,11 @@
       rel="stylesheet"
       href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
     />
-    <script>
-      (function () {
-        var s = document.createElement("script");
-        s.src =
-          "https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=1523c569-fb40-448b-8a73-6e1a37b34216&_=" +
-          Date.now();
-        s.type = "text/javascript";
-        s.defer = true;
-        document.head.appendChild(s);
-      })();
-    </script>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+    />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script
       src="https://telegram.org/js/telegram-web-app.js"
       defer
@@ -378,6 +372,7 @@
     <script>
       var adminToken = null;
       var adminUserId = null;
+      var authWatchdog = null;
       if (window.Telegram && window.Telegram.WebApp) {
         window.Telegram.WebApp.ready();
         window.Telegram.WebApp.expand();
@@ -395,6 +390,21 @@
         }
         return headers;
       }
+      // fetch с таймаутом: чтобы авторизация никогда не «висела» бесконечно,
+      // если сервер не отвечает (проблемы сети/D1). AbortController реально
+      // отменяет зависший запрос, а не только «проигрывает» гонку промисов.
+      function fetchWithTimeout(url, options, ms) {
+        ms = ms || 10000;
+        options = options || {};
+        var controller = new AbortController();
+        var timer = setTimeout(function () {
+          controller.abort();
+        }, ms);
+        return fetch(url, Object.assign({}, options, { signal: controller.signal }))
+          .finally(function () {
+            clearTimeout(timer);
+          });
+      }
       function showToast(message) {
         var existingToast = document.querySelector(".toast");
         if (existingToast) existingToast.remove();
@@ -409,6 +419,7 @@
         }, 3000);
       }
       function enterAdminPanel() {
+        if (authWatchdog) clearTimeout(authWatchdog);
         document.getElementById("loginScreen").style.display = "none";
         document.getElementById("adminPanel").style.display = "block";
         initAdminMap();
@@ -418,7 +429,7 @@
       // проверяются на сервере в requireAdmin). При успехе сохраняет токен и входит.
       async function tryAdminAccess() {
         try {
-          var adminRes = await fetch("/api/admin/benches", {
+          var adminRes = await fetchWithTimeout("/api/admin/benches", {
             headers: adminHeaders(),
           });
           var adminData = await adminRes.json();
@@ -459,6 +470,15 @@
         });
       }
       async function checkAuth() {
+        // Страховка: если авторизация по какой-то причине не завершится —
+        // показываем понятную ошибку вместо бесконечного спиннера.
+        authWatchdog = setTimeout(function () {
+          var st = document.getElementById("adminAuthStatus");
+          if (st && /Авторизация/.test(st.innerText)) {
+            st.innerHTML =
+              '<i class="fa-solid fa-triangle-exclamation" style="color:var(--red)"></i> Не удалось авторизоваться. Перезайдите в бота или проверьте подключение.';
+          }
+        }, 12000);
         // 1) Токен, переданный из личного кабинета (открыли админку по ссылке)
         var urlToken = null;
         try {
@@ -469,7 +489,7 @@
           if (await tryAdminAccess()) {
             try {
               var me = await (
-                await fetch("/api/me", { headers: adminHeaders() })
+                await fetchWithTimeout("/api/me", { headers: adminHeaders() })
               ).json();
               if (me.success && me.user) adminUserId = me.user.id;
             } catch (e) {}
@@ -499,7 +519,7 @@
         var initData = await waitForInitData();
         if (initData) {
           try {
-            var res = await fetch("/api/auth/telegram", {
+            var res = await fetchWithTimeout("/api/auth/telegram", {
               method: "POST",
               headers: { "Content-Type": "application/json" },
               body: JSON.stringify({ initData: initData }),
@@ -770,7 +790,7 @@
         var modal = document.getElementById("benchDetailModal");
         if (modal) modal.remove();
         if (adminMap) {
-          adminMap.setCenter([lat, lng], 17);
+          adminMap.setView([lat, lng], 17);
         } else {
           alert("Карта еще не загружена");
         }
@@ -1193,9 +1213,22 @@
             }
           });
       }
+      function adminBenchIcon() {
+        return L.icon({
+          iconUrl:
+            "data:image/svg+xml;base64," +
+            btoa(
+              '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect x="8" y="40" width="48" height="5" rx="2.5" fill="#2d6da8"/><rect x="12" y="18" width="40" height="5" rx="2.5" fill="#3d8bd0"/><rect x="10" y="18" width="5" height="27" rx="2.5" fill="#1e4d7a"/><rect x="49" y="18" width="5" height="27" rx="2.5" fill="#1e4d7a"/><rect x="8" y="45" width="5" height="14" rx="2.5" fill="#1e4d7a"/><rect x="51" y="45" width="5" height="14" rx="2.5" fill="#1e4d7a"/></svg>',
+            ),
+          iconSize: [40, 40],
+          iconAnchor: [20, 40],
+        });
+      }
       function renderAdminMapMarkers() {
         if (!adminMap) return;
-        adminMap.geoObjects.removeAll();
+        adminMap.eachLayer(function (layer) {
+          if (layer instanceof L.Marker) adminMap.removeLayer(layer);
+        });
         fetch("/api/admin/benches", {
           headers: adminHeaders(),
           cache: "no-store",
@@ -1206,29 +1239,17 @@
           .then(function (d) {
             if (!d.success) return;
             d.benches.forEach(function (b) {
-              var pm = new ymaps.Placemark(
-                [b.latitude, b.longitude],
-                {
-                  balloonContent:
-                    escapeHtml(b.description || "Скамейка") +
-                    "<br>Статус: " +
-                    b.status,
-                },
-                {
-                  iconLayout: "default#image",
-                  iconImageHref:
-                    "data:image/svg+xml;base64," +
-                    btoa(
-                      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect x="8" y="40" width="48" height="5" rx="2.5" fill="#2d6da8"/><rect x="12" y="18" width="40" height="5" rx="2.5" fill="#3d8bd0"/><rect x="10" y="18" width="5" height="27" rx="2.5" fill="#1e4d7a"/><rect x="49" y="18" width="5" height="27" rx="2.5" fill="#1e4d7a"/><rect x="8" y="45" width="5" height="14" rx="2.5" fill="#1e4d7a"/><rect x="51" y="45" width="5" height="14" rx="2.5" fill="#1e4d7a"/></svg>',
-                    ),
-                  iconImageSize: [40, 40],
-                  iconImageOffset: [-20, -40],
-                },
+              var pm = L.marker([b.latitude, b.longitude], {
+                icon: adminBenchIcon(),
+              }).addTo(adminMap);
+              pm.bindPopup(
+                escapeHtml(b.description || "Скамейка") +
+                  "<br>Статус: " +
+                  b.status,
               );
-              pm.events.add("click", function () {
+              pm.on("click", function () {
                 viewBench(b.id);
               });
-              adminMap.geoObjects.add(pm);
             });
           });
       }
@@ -1372,28 +1393,23 @@
       var adminMapInitAttempts = 0;
       var ADMIN_MAP_MAX_ATTEMPTS = 40;
       function initAdminMap() {
-        adminMapInitAttempts++;
-        if (typeof ymaps === "undefined") {
-          if (adminMapInitAttempts < ADMIN_MAP_MAX_ATTEMPTS) setTimeout(initAdminMap, 500);
+        if (adminMap) return;
+        if (typeof L === "undefined") {
+          adminMapInitAttempts++;
+          if (adminMapInitAttempts < ADMIN_MAP_MAX_ATTEMPTS) setTimeout(initAdminMap, 300);
           return;
         }
-        if (typeof ymaps !== "undefined" && typeof ymaps.Map !== "undefined") {
-          ymaps.ready(function () {
-            if (adminMap) return;
-            adminMap = new ymaps.Map("adminMap", {
-              center: [56.8587, 35.9176],
-              zoom: 13,
-              controls: [],
-            });
-          });
-        } else {
-          if (adminMapInitAttempts < ADMIN_MAP_MAX_ATTEMPTS) setTimeout(initAdminMap, 500);
-        }
+        adminMap = L.map("adminMap").setView([56.8587, 35.9176], 13);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+          maxZoom: 18,
+          attribution:
+            '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
+        }).addTo(adminMap);
+        setTimeout(function () {
+          if (adminMap) adminMap.invalidateSize();
+        }, 300);
+        renderAdminMapMarkers();
       }
-      ymaps &&
-        ymaps.ready(function () {
-          renderAdminMapMarkers();
-        });
       document.addEventListener("visibilitychange", function () {
         if (!document.hidden && adminMap) {
           renderAdminMapMarkers();

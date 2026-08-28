@@ -2579,18 +2579,24 @@
           showToast("Нет доступа");
           return;
         }
-        // Внутри Telegram WebApp остаёмся в том же WebView: тогда у админ-панели
-        // доступны и initData, и общий localStorage (tver_user с JWT). Если просто
-        // сделать window.open — откроется внешний браузер, где ни того ни другого
-        // нет, и вход не сработает.
-        if (window.Telegram && window.Telegram.WebApp) {
-          window.location.href = "/admin?token=" + encodeURIComponent(currentUser.token);
-        } else {
-          window.open(
-            "/admin?token=" + encodeURIComponent(currentUser.token),
-            "_blank",
-          );
+        var overlay = document.getElementById("adminOverlay");
+        var frame = document.getElementById("adminFrame");
+        if (!overlay || !frame) {
+          showToast("Ошибка интерфейса админки");
+          return;
         }
+        // Открываем /admin внутри iframe того же origin, а не полной навигацией —
+        // так Telegram.WebApp не пересоздаётся, а токен передаём явно через URL,
+        // не полагаясь на initData внутри iframe (она там недоступна).
+        frame.src = "/admin?token=" + encodeURIComponent(currentUser.token);
+        overlay.style.display = "flex";
+      }
+
+      function closeAdminPanel() {
+        var overlay = document.getElementById("adminOverlay");
+        var frame = document.getElementById("adminFrame");
+        if (overlay) overlay.style.display = "none";
+        if (frame) frame.src = "about:blank"; // выгружаем, чтобы не жить в фоне
       }
       function renderProfile() {
         var h =
