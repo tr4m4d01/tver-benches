@@ -46,6 +46,16 @@
       href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
     />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Кластеризация маркеров (совместимо с Leaflet 1.9.x) -->
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"
+    />
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
     <!-- Telegram WebApp SDK (для прозрачной авторизации через initData) -->
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     <style>
@@ -1181,6 +1191,7 @@
       var currentUser = null,
         userPosition = null,
         myMap = null,
+        benchCluster = null,
         mapInitialized = false,
         userPlacemark = null,
         allBenches = [],
@@ -1390,6 +1401,15 @@
           attribution:
             '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         }).addTo(myMap);
+        // Группа кластеризации для скамеек (если плагин доступен). Если нет —
+        // маркеры добавляются напрямую на карту (без кластеров).
+        if (typeof L.MarkerClusterGroup === "function") {
+          benchCluster = L.markerClusterGroup({
+            maxClusterRadius: 50,
+            chunkedLoading: true,
+          });
+          myMap.addLayer(benchCluster);
+        }
         hidePreloader();
         loadBenches();
         setTimeout(function () {
@@ -1412,6 +1432,23 @@
         setTimeout(function () {
           t.remove();
         }, 3000);
+      }
+      // Безопасная обёртка над Telegram WebApp HapticFeedback. Вне Telegram
+      // (обычный браузер/dev) — просто no-op, логику не ломает.
+      // action: "impactOccurred" | "notificationOccurred" | "selectionChanged"
+      // style:  impact -> "light"|"medium"|"heavy"|"rigid"|"soft"
+      //         notification -> "success"|"error"|"warning"
+      function hapticFeedback(action, style) {
+        try {
+          var tg = window.Telegram && window.Telegram.WebApp;
+          if (
+            tg &&
+            tg.HapticFeedback &&
+            typeof tg.HapticFeedback[action] === "function"
+          ) {
+            tg.HapticFeedback[action](style);
+          }
+        } catch (e) {}
       }
       function showOverlay(title, msg) {
         var o = document.createElement("div");
@@ -1640,22 +1677,30 @@
           .then(function (d) {
             if (!d.success) return;
             allBenches = d.benches;
-            myMap.eachLayer(function (layer) {
-              if (
-                layer instanceof L.Marker &&
-                layer !== userPlacemark &&
-                layer !== dragPlacemark
-              ) {
-                myMap.removeLayer(layer);
-              }
-            });
+            // Удаляем старые маркеры скамеек (через кластер-группу, если она
+            // создана, иначе — прямым обходом слоёв карты).
+            if (benchCluster) {
+              benchCluster.clearLayers();
+            } else {
+              myMap.eachLayer(function (layer) {
+                if (
+                  layer instanceof L.Marker &&
+                  layer !== userPlacemark &&
+                  layer !== dragPlacemark
+                ) {
+                  myMap.removeLayer(layer);
+                }
+              });
+            }
             d.benches.forEach(function (b) {
               var pm = L.marker([b.latitude, b.longitude], {
                 icon: createBenchIcon(),
-              }).addTo(myMap);
+              });
               pm.on("click", function () {
                 showBenchCard(b);
               });
+              if (benchCluster) benchCluster.addLayer(pm);
+              else pm.addTo(myMap);
             });
           });
       }
@@ -1664,6 +1709,19 @@
       // описанием и кнопками (маршрут, отзывы, избранное, лайк, жалоба) и
       // вставляет в #benchCardContent, затем показывает карточку и центрирует
       // карту на этой скамейке.
+      function renderStars(rating) {
+        var r = Math.round(Number(rating) || 0);
+        if (r < 0) r = 0;
+        if (r > 5) r = 5;
+        var h = "";
+        for (var i = 1; i <= 5; i++) {
+          h +=
+            '<i class="fa-solid fa-star" style="color:' +
+            (i <= r ? "#ffd700" : "#333") +
+            '"></i>';
+        }
+        return h;
+      }
       function showBenchCard(b) {
         selectedBench = b;
         var dist = "";
@@ -1710,8 +1768,15 @@
           "</span></div>" +
           '<div class="bench-card-distance"><i class="fa-solid fa-location-arrow"></i> ' +
           dist +
-          "</div></div>" +
-          (b.description
+           "</div></div>" +
+           (b.rating
+             ? '<div class="bench-card-rating" style="margin:4px 0;font-size:14px"><i class="fa-solid fa-star" style="color:#ffd700"></i> ' +
+               renderStars(b.rating) +
+               ' <span style="color:var(--gray);font-size:12px">(' +
+               (Number(b.rating) || 0).toFixed(1) +
+               ")</span></div>"
+             : "") +
+           (b.description
             ? '<div class="bench-card-desc">' +
               escapeHtml(b.description) +
               "</div>"
@@ -1846,6 +1911,7 @@
                 }
               }
               showToast("Лайк");
+              hapticFeedback("impactOccurred", "light");
             } else {
               showToast("Не удалось");
             }
@@ -1876,6 +1942,7 @@
           })
           .then(function (d) {
             showToast(d.favorited ? "Добавлено" : "Удалено");
+            hapticFeedback("notificationOccurred", "success");
             var favBtn = document.getElementById("favBtn-" + id);
             if (favBtn) {
               if (d.favorited) {
@@ -2057,6 +2124,7 @@
                 e.remove();
               });
               showToast("Отзыв отправлен");
+              hapticFeedback("notificationOccurred", "success");
             } else {
               showToast(d.error);
             }
@@ -2460,6 +2528,7 @@
             if (d.success) {
               closeModal("addModal");
               showToast("Отправлено на модерацию");
+              hapticFeedback("notificationOccurred", "success");
             } else {
               showOverlay("Ошибка", d.error || "Не удалось добавить");
             }

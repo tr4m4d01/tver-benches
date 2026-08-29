@@ -19,6 +19,15 @@
       href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
     />
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.css"
+    />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/leaflet.markercluster@1.5.3/dist/MarkerCluster.Default.css"
+    />
+    <script src="https://unpkg.com/leaflet.markercluster@1.5.3/dist/leaflet.markercluster.js"></script>
     <script
       src="https://telegram.org/js/telegram-web-app.js"
       defer
@@ -1226,9 +1235,13 @@
       }
       function renderAdminMapMarkers() {
         if (!adminMap) return;
-        adminMap.eachLayer(function (layer) {
-          if (layer instanceof L.Marker) adminMap.removeLayer(layer);
-        });
+        if (adminCluster) {
+          adminCluster.clearLayers();
+        } else {
+          adminMap.eachLayer(function (layer) {
+            if (layer instanceof L.Marker) adminMap.removeLayer(layer);
+          });
+        }
         fetch("/api/admin/benches", {
           headers: adminHeaders(),
           cache: "no-store",
@@ -1241,7 +1254,9 @@
             d.benches.forEach(function (b) {
               var pm = L.marker([b.latitude, b.longitude], {
                 icon: adminBenchIcon(),
-              }).addTo(adminMap);
+              });
+              if (adminCluster) adminCluster.addLayer(pm);
+              else pm.addTo(adminMap);
               pm.bindPopup(
                 escapeHtml(b.description || "Скамейка") +
                   "<br>Статус: " +
@@ -1390,6 +1405,7 @@
         document.getElementById("photoViewer").classList.remove("active");
       }
       var adminMap = null;
+      var adminCluster = null;
       var adminMapInitAttempts = 0;
       var ADMIN_MAP_MAX_ATTEMPTS = 40;
       function initAdminMap() {
@@ -1405,6 +1421,13 @@
           attribution:
             '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors',
         }).addTo(adminMap);
+        if (typeof L.MarkerClusterGroup === "function") {
+          adminCluster = L.markerClusterGroup({
+            maxClusterRadius: 50,
+            chunkedLoading: true,
+          });
+          adminMap.addLayer(adminCluster);
+        }
         setTimeout(function () {
           if (adminMap) adminMap.invalidateSize();
         }, 300);
